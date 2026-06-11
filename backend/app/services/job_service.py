@@ -102,6 +102,26 @@ async def get_job(db: AsyncSession, job_id: uuid.UUID) -> Job | None:
     return result.scalar_one_or_none()
 
 
+async def get_jobs_for_matching(
+    db: AsyncSession,
+    *,
+    location: str | None = None,
+    remote_only: bool = False,
+    contract_type: str | None = None,
+    limit: int = 500,
+) -> list[Job]:
+    """Fetch full Job rows for in-memory scoring and matching."""
+    query = select(Job).limit(limit)
+    if remote_only:
+        query = query.where(Job.remote == "full")
+    if location:
+        query = query.where(Job.location.ilike(f"%{location}%"))
+    if contract_type:
+        query = query.where(Job.contract_type == contract_type)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def get_profile_dict(db: AsyncSession, user_id: uuid.UUID) -> dict:
     """Return user's active profile as a plain dict for scoring."""
     from app.db.models import Profile
@@ -125,6 +145,7 @@ async def get_profile_dict(db: AsyncSession, user_id: uuid.UUID) -> dict:
         "countries": profile.countries,
         "cities": profile.cities,
         "contract_types": profile.contract_types,
+        "languages": profile.languages,
         "version": profile.version,
     }
 

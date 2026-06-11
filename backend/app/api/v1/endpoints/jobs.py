@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -7,9 +8,11 @@ from app.api.deps import get_current_active_user
 from app.core.database import get_db
 from app.db.models import AgentLog, User
 from app.schemas.job import JobListItem, JobRead, JobSyncResult
-from app.services import job_service, normalizer, scoring_service
+from app.schemas.recommendation import JobRecommendation, MatchDetailRead, ScoreBreakdownRead
+from app.services import job_service, matching_engine, normalizer, scoring_service
 from app.services.sources import adzuna, france_travail
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
@@ -33,6 +36,108 @@ async def list_jobs(
         remote=remote,
     )
 
+
+# ── Recommendations — MUST be registered before /{job_id} ────────────────────
+
+@router.get("/recommendations", response_model=list[JobRecommendation])
+async def get_recommendations(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    min_score: int = Query(default=0, ge=0, le=100, description="Minimum total score (0-100)"),
+    location: str | None = Query(default=None, max_length=100, description="Filter by location keyword"),
+    remote_only: bool = Query(default=False, description="Return only fully remote jobs"),
+    contract_type: str | None = Query(default=None, description="Filter by contract type (cdi, cdd, stage…)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> list[JobRecommendation]:
+    """
+    Return jobs ranked by deterministic score against the current profile.
+
+    Each result includes:
+    - Full score breakdown (skill_match, experience, location, salary, contract, company, freshness)
+    - Match detail (matched_skills, missing_skills, role_match_percentage, etc.)
+
+    Jobs are scored in-memory — up to 500 candidates are evaluated, then
+    the top results after filtering are returned.
+    """
+    profile = await job_service.get_profile_dict(db, current_user.id)
+    if not profile:
+        raise HTTPException(
+            status_code=400,
+            detail="No active profile found — create or upload a CV first",
+        )
+
+    jobs = await job_service.get_jobs_for_matching(
+        db,
+        location=location,
+        remote_only=remote_only,
+        contract_type=contract_type,
+        limit=500,
+    )
+
+    if not jobs:
+        return []
+
+    results: list[tuple[int, JobRecommendation]] = []
+
+    for job in jobs:
+        try:
+            job_dict = _job_to_dict(job)
+            breakdown, confidence = scoring_service.score_job(job_dict, profile)
+            mr = matching_engine.match(job_dict, profile)
+
+            if breakdown.total < min_score:
+                continue
+
+            rec = JobRecommendation(
+                job_id=job.id,
+                title=job.title,
+                company_name=job.company_name,
+                location=job.location,
+                remote=job.remote,
+                contract_type=job.contract_type,
+                salary_min=job.salary_min,
+                salary_max=job.salary_max,
+                required_skills=job.required_skills or [],
+                url=job.url,
+                published_at=job.published_at,
+                score=ScoreBreakdownRead(
+                    skill_match=breakdown.skill_match,
+                    experience_match=breakdown.experience_match,
+                    location_score=breakdown.location_score,
+                    salary_score=breakdown.salary_score,
+                    contract_score=breakdown.contract_score,
+                    company_score=breakdown.company_score,
+                    freshness_score=breakdown.freshness_score,
+                    total=breakdown.total,
+                    extraction_confidence=confidence,
+                    needs_review=breakdown.needs_review,
+                ),
+                match=MatchDetailRead(
+                    matched_skills=mr.matched_skills,
+                    missing_skills=mr.missing_skills,
+                    skill_match_percentage=mr.skill_match_percentage,
+                    role_match_percentage=mr.role_match_percentage,
+                    best_matching_role=mr.best_matching_role,
+                    location_match=mr.location_match,
+                    remote_match=mr.remote_match,
+                    contract_match=mr.contract_match,
+                    language_match=mr.language_match,
+                    salary_ok=mr.salary_ok,
+                    experience_gap=mr.experience_gap,
+                    overall_fit=mr.overall_fit,
+                ),
+            )
+            results.append((breakdown.total, rec))
+        except Exception as exc:
+            logger.warning("Skipping job %s in recommendations: %s", job.id, exc)
+
+    # Sort by total score descending, then paginate
+    results.sort(key=lambda x: x[0], reverse=True)
+    return [rec for _, rec in results[offset: offset + limit]]
+
+
+# ── Single job (after literal routes) ────────────────────────────────────────
 
 @router.get("/{job_id}", response_model=JobRead)
 async def get_job(
@@ -65,7 +170,6 @@ async def sync_jobs(
     errors: list[str] = []
     source_counts: dict[str, int] = {}
 
-    # ── Collect from sources ──────────────────────────────────────────────────
     sources = [
         ("france_travail", france_travail.fetch_jobs),
         ("adzuna", adzuna.fetch_jobs),
@@ -87,7 +191,6 @@ async def sync_jobs(
 
                     if is_new:
                         new_jobs += 1
-                        # Score immediately if user has a profile
                         if profile:
                             job_dict = {
                                 "required_skills": job.required_skills,
@@ -119,7 +222,6 @@ async def sync_jobs(
 
     await db.commit()
 
-    # Log the sync event
     db.add(AgentLog(
         user_id=current_user.id,
         agent="job_collection",
@@ -135,4 +237,22 @@ async def sync_jobs(
         "scored": scored,
         "sources": source_counts,
         "errors": errors[:10],
+    }
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _job_to_dict(job) -> dict:
+    return {
+        "title": job.title,
+        "required_skills": job.required_skills or [],
+        "experience_level": job.experience_level,
+        "location": job.location,
+        "remote": job.remote,
+        "contract_type": job.contract_type,
+        "salary_min": job.salary_min,
+        "salary_max": job.salary_max,
+        "published_at": job.published_at,
+        "company_quality_score": 50,
+        "language": getattr(job, "language", "fr"),
     }
