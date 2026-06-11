@@ -1,0 +1,254 @@
+{
+  "name": "Human Approval — CV & Cover Letter",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "approve-cv",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000001",
+      "name": "Approval Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "approve-cv-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and extract fields from request body\nconst body = $input.item.json.body || {};\nif (!body.job_id) throw new Error('Missing required field: job_id');\nif (!body.application_id) throw new Error('Missing required field: application_id');\n\nreturn [{\n  json: {\n    job_id: body.job_id,\n    application_id: body.application_id,\n    language: body.language || 'fr',\n    letter_type: body.letter_type || 'cover_letter'\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000002",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/auth/login",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ email: $env.SERVICE_ACCOUNT_EMAIL, password: $env.SERVICE_ACCOUNT_PASSWORD }) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000003",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/jobs/{{ $('Validate Input').item.json.job_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Login').item.json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000004",
+      "name": "Get Job Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise job for the approval email / UI\nconst job = $input.item.json;\nconst validatedInput = $('Validate Input').item.json;\nconst score = job.score ? job.score.total : 'N/A';\n\nreturn [{\n  json: {\n    ...validatedInput,\n    job_title: job.title,\n    company: job.company_name,\n    location: job.location,\n    score,\n    url: job.url,\n    summary: `${job.title} @ ${job.company_name} | Score: ${score} | ${job.location}`\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000005",
+      "name": "Prepare Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'pending_approval', message: 'Workflow paused — waiting for human approval', job: { title: $json.job_title, company: $json.company, score: $json.score }, resume_url: $execution.resumeUrl }) }}"
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000006",
+      "name": "Acknowledge Request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 220]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "webhookSuffix": "/approval"
+        }
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000007",
+      "name": "Wait for Approval",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if approved or rejected\nconst resumeData = $input.item.json.body || {};\nconst approved = resumeData.approved === true || resumeData.approved === 'true';\nconst previousData = $('Prepare Summary').item.json;\n\nif (!approved) {\n  throw new Error('Application rejected by user');\n}\n\nreturn [{ json: { ...previousData, approved: true } }];"
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000008",
+      "name": "Check Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/agents/cv_adaptation_agent/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Login').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ params: { job_id: $json.job_id, languages: [$json.language] } }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000009",
+      "name": "Generate CV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/agents/cover_letter_agent/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Login').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ params: { job_id: $('Check Approval').item.json.job_id, letter_type: $('Check Approval').item.json.letter_type, language: $('Check Approval').item.json.language } }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000010",
+      "name": "Generate Cover Letter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 440]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/applications/{{ $('Check Approval').item.json.application_id }}/status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Login').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "{\"status\": \"cv_generated\", \"notes\": \"CV and cover letter generated via n8n approval workflow\"}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000011",
+      "name": "Update Application Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 370]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cvResult = $('Generate CV').item.json;\nconst letterResult = $('Generate Cover Letter').item.json;\nconst appResult = $input.item.json;\n\nreturn [{\n  json: {\n    success: true,\n    application_id: $('Check Approval').item.json.application_id,\n    job_id: $('Check Approval').item.json.job_id,\n    cv: cvResult.result,\n    cover_letter: letterResult.result,\n    application_status: appResult.status\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0004-0001-0001-000000000012",
+      "name": "Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 370]
+    }
+  ],
+  "connections": {
+    "Approval Request Webhook": {
+      "main": [
+        [{"node": "Validate Input", "type": "main", "index": 0}]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [{"node": "Login", "type": "main", "index": 0}]
+      ]
+    },
+    "Login": {
+      "main": [
+        [{"node": "Get Job Details", "type": "main", "index": 0}]
+      ]
+    },
+    "Get Job Details": {
+      "main": [
+        [{"node": "Prepare Summary", "type": "main", "index": 0}]
+      ]
+    },
+    "Prepare Summary": {
+      "main": [
+        [
+          {"node": "Acknowledge Request", "type": "main", "index": 0},
+          {"node": "Wait for Approval", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Wait for Approval": {
+      "main": [
+        [{"node": "Check Approval", "type": "main", "index": 0}]
+      ]
+    },
+    "Check Approval": {
+      "main": [
+        [
+          {"node": "Generate CV", "type": "main", "index": 0},
+          {"node": "Generate Cover Letter", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Generate CV": {
+      "main": [
+        [{"node": "Update Application Status", "type": "main", "index": 0}]
+      ]
+    },
+    "Update Application Status": {
+      "main": [
+        [{"node": "Done", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "id": "workflow-human-approval-004"
+}

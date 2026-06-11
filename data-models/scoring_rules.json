@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "description": "Deterministic scoring rules. LLM only explains, never scores.",
+  "total_max": 100,
+  "thresholds": {
+    "auto_archive": 40,
+    "needs_review": 60,
+    "shortlist": 70,
+    "confidence_min": 60
+  },
+  "weights": {
+    "skill_match": {
+      "max": 30,
+      "description": "How many required skills match user profile",
+      "logic": "matched_skills / total_required_skills * 30",
+      "fallback_if_unknown": 15,
+      "notes": "If job lists no skills, give half points — we just don't know"
+    },
+    "experience_match": {
+      "max": 20,
+      "description": "How close job level is to user level",
+      "logic": {
+        "exact_match": 20,
+        "one_level_off": 10,
+        "two_levels_off": 0
+      },
+      "fallback_if_unknown": 10
+    },
+    "location_score": {
+      "max": 15,
+      "description": "Location fit based on user preferences",
+      "logic": {
+        "full_remote_and_user_wants_remote": 15,
+        "priority_city_match": 15,
+        "acceptable_city_match": 10,
+        "same_country_only": 5,
+        "hybrid_remote": 6,
+        "no_match": 0
+      }
+    },
+    "salary_score": {
+      "max": 15,
+      "description": "Salary fit vs user expectations",
+      "logic": "linear scale between salary_min (0pts) and salary_target (15pts)",
+      "fallback_if_unknown": 7,
+      "notes": "Unknown salary gives half points — common in France"
+    },
+    "contract_score": {
+      "max": 10,
+      "description": "Contract type matches user preferences",
+      "logic": {
+        "exact_match": 10,
+        "no_match": 0
+      }
+    },
+    "company_score": {
+      "max": 5,
+      "description": "Company quality based on size/reputation",
+      "logic": "company.quality_score / 100 * 5",
+      "fallback_if_unknown": 2
+    },
+    "freshness_score": {
+      "max": 5,
+      "description": "How recently the job was posted",
+      "logic": {
+        "0_to_2_days": 5,
+        "3_to_7_days": 3,
+        "8_to_14_days": 1,
+        "older_than_14_days": 0,
+        "unknown_date": 2
+      }
+    }
+  },
+  "confidence": {
+    "description": "How complete is the parsed job data — affects trust in score",
+    "fields_checked": [
+      "required_skills",
+      "experience_level",
+      "salary_min",
+      "location",
+      "contract_type"
+    ],
+    "logic": "filled_fields / total_fields * 100",
+    "rules": {
+      "score_high_confidence_low": {
+        "condition": "total >= 60 AND confidence < 60",
+        "action": "needs_review",
+        "reason": "Score looks good but we parsed the job poorly — human should check"
+      }
+    }
+  },
+  "avoid_rules": {
+    "description": "Auto-archive if job matches avoid list",
+    "checks": [
+      "title contains avoid_roles",
+      "description contains avoid_keywords"
+    ],
+    "action": "auto_archive"
+  },
+  "feedback_overrides": {
+    "description": "User feedback adjusts future scores",
+    "examples": [
+      {
+        "signal": "user_rejected_job",
+        "pattern": "company X",
+        "effect": "company_score -= 2 for same company next time"
+      },
+      {
+        "signal": "salary_too_low",
+        "effect": "salary_min increases by 2000 after 3 consecutive rejections"
+      },
+      {
+        "signal": "interview_obtained",
+        "pattern": "skill Y + company size Z",
+        "effect": "boost similar jobs by 5pts"
+      }
+    ]
+  }
+}

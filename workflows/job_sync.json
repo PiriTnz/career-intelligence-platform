@@ -1,0 +1,173 @@
+{
+  "name": "Job Sync — Scheduled",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/auth/login",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ email: $env.SERVICE_ACCOUNT_EMAIL, password: $env.SERVICE_ACCOUNT_PASSWORD }) }}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000002",
+      "name": "Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/agents/job_collection_agent/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Login').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\"params\": {\"keywords\": [\"AI engineer\", \"LLM engineer\", \"MLOps\", \"ML engineer\", \"CIFRE\"], \"location\": \"Lyon\", \"location_code\": \"69\", \"max_results\": 50}}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000003",
+      "name": "Collect Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-0001",
+              "leftValue": "={{ $json.result.fetched }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000004",
+      "name": "Any Jobs Fetched?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/agents/job_scoring_agent/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Login').item.json.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "{\"params\": {\"batch_size\": 100}}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000005",
+      "name": "Score New Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log the sync results\nconst collectResult = $('Collect Jobs').item.json;\nconst scoreResult = $input.item.json;\n\nreturn [{\n  json: {\n    syncedAt: new Date().toISOString(),\n    collected: collectResult.result,\n    scored: scoreResult.result,\n    status: 'ok'\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000006",
+      "name": "Log Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No new jobs — skip scoring\nconst collectResult = $('Collect Jobs').item.json;\nreturn [{ json: { syncedAt: new Date().toISOString(), fetched: 0, message: 'No new jobs fetched', result: collectResult } }];"
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000007",
+      "name": "No New Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [{"node": "Login", "type": "main", "index": 0}]
+      ]
+    },
+    "Login": {
+      "main": [
+        [{"node": "Collect Jobs", "type": "main", "index": 0}]
+      ]
+    },
+    "Collect Jobs": {
+      "main": [
+        [{"node": "Any Jobs Fetched?", "type": "main", "index": 0}]
+      ]
+    },
+    "Any Jobs Fetched?": {
+      "main": [
+        [{"node": "Score New Jobs", "type": "main", "index": 0}],
+        [{"node": "No New Jobs", "type": "main", "index": 0}]
+      ]
+    },
+    "Score New Jobs": {
+      "main": [
+        [{"node": "Log Results", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "id": "workflow-job-sync-001"
+}

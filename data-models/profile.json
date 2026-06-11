@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "personal": {
+    "name": "Tanaz",
+    "email": "",
+    "location": "Lyon, France"
+  },
+  "target_roles": [
+    "AI Engineer",
+    "LLM Engineer",
+    "ML Engineer",
+    "DevOps Engineer",
+    "AI Automation Engineer"
+  ],
+  "avoid_roles": [
+    "Data Analyst",
+    "Support Engineer",
+    "Helpdesk",
+    "Data Entry"
+  ],
+  "skills": {
+    "strong": ["Python", "Docker", "LLM", "RAG", "FastAPI", "n8n"],
+    "medium": ["PostgreSQL", "Linux", "C#", "Git", "REST API"],
+    "learning": ["Kubernetes", "Terraform", "MCP", "LangChain"]
+  },
+  "experience_level": "junior",
+  "salary": {
+    "min": 38000,
+    "target": 45000,
+    "currency": "EUR"
+  },
+  "location_preferences": {
+    "priority_cities": ["Lyon", "Grenoble"],
+    "acceptable_cities": ["Paris", "Bordeaux", "Toulouse"],
+    "remote": "hybrid",
+    "max_commute_km": 30
+  },
+  "contract_types": ["alternance", "cdi"],
+  "languages": {
+    "priority": ["fr", "en"],
+    "acceptable": ["fr", "en"]
+  },
+  "availability": "2024-09-01"
+}
