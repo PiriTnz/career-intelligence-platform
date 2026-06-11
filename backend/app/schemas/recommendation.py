@@ -36,7 +36,7 @@ class MatchDetailRead(BaseModel):
 
 
 class JobRecommendation(BaseModel):
-    """A job with its full score breakdown and match detail."""
+    """A job with its full score breakdown, match detail, and preference ranking."""
     model_config = ConfigDict(from_attributes=False)
 
     # Job identity
@@ -52,11 +52,15 @@ class JobRecommendation(BaseModel):
     url: str
     published_at: datetime | None
 
-    # Score (deterministic weighted)
+    # Deterministic profile score breakdown
     score: ScoreBreakdownRead
 
-    # Match detail (named, human-readable)
+    # Profile-aware match detail
     match: MatchDetailRead
+
+    # Preference-aware ranking (from feedback learning)
+    preference_score: float = 50.0   # 0-100 affinity from past feedback; 50 = neutral
+    final_score: int = 0             # blended ranking score used for ordering
 
 
 class RecommendationSummary(BaseModel):

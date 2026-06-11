@@ -7,9 +7,10 @@ import uuid
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_active_user, get_current_user
 from app.core.database import get_db
 from app.db.models import User
+from app.schemas.feedback import AffinityItem, PreferenceProfileRead
 from app.schemas.profile import (
     CVUploadResult,
     ProfileCreate,
@@ -17,7 +18,7 @@ from app.schemas.profile import (
     ProfileUpdate,
     ProfileVersionRead,
 )
-from app.services import profile_service
+from app.services import preference_service, profile_service
 from app.services.cv_parser import extract_text_from_pdf, parse_cv
 from app.services.profile_service import (
     create_profile,
@@ -178,3 +179,30 @@ async def get_profile_versions(
 ) -> list[ProfileVersionRead]:
     """Return all CV upload history for the current user, newest first."""
     return await list_profile_versions(db, current_user.id)
+
+
+@router.get("/preferences", response_model=PreferenceProfileRead)
+async def get_preferences(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> PreferenceProfileRead:
+    """
+    Return the computed preference profile derived from feedback events.
+
+    Preferences are learned from feedback signals:
+      interview (+3), applied (+2), saved (+1), viewed (0), rejected (−2)
+
+    When no feedback events exist, all affinity lists are empty.
+    """
+    prefs = await preference_service.get_preference_profile(db, current_user.id)
+
+    return PreferenceProfileRead(
+        preferred_skills=[AffinityItem(name=n, affinity=a) for n, a in prefs.preferred_skills],
+        preferred_locations=[AffinityItem(name=n, affinity=a) for n, a in prefs.preferred_locations],
+        preferred_companies=[AffinityItem(name=n, affinity=a) for n, a in prefs.preferred_companies],
+        preferred_contract_types=[AffinityItem(name=n, affinity=a) for n, a in prefs.preferred_contract_types],
+        preferred_job_families=[AffinityItem(name=n, affinity=a) for n, a in prefs.preferred_job_families],
+        total_events=prefs.total_events,
+        signal_breakdown=prefs.signal_breakdown,
+        has_preferences=prefs.has_preferences,
+    )

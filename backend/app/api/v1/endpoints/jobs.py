@@ -1,15 +1,17 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
 from app.core.database import get_db
-from app.db.models import AgentLog, User
+from app.db.models import AgentLog, FeedbackEvent, User
+from app.schemas.feedback import FeedbackCreate, FeedbackEventRead
 from app.schemas.job import JobListItem, JobRead, JobSyncResult
 from app.schemas.recommendation import JobRecommendation, MatchDetailRead, ScoreBreakdownRead
 from app.services import job_service, matching_engine, normalizer, scoring_service
+from app.services import preference_service
 from app.services.sources import adzuna, france_travail
 
 logger = logging.getLogger(__name__)
@@ -51,11 +53,14 @@ async def get_recommendations(
     current_user: User = Depends(get_current_active_user),
 ) -> list[JobRecommendation]:
     """
-    Return jobs ranked by deterministic score against the current profile.
+    Return jobs ranked by blended score (profile + preference feedback).
 
     Each result includes:
     - Full score breakdown (skill_match, experience, location, salary, contract, company, freshness)
     - Match detail (matched_skills, missing_skills, role_match_percentage, etc.)
+    - preference_score: learned affinity from past feedback events (50 = neutral/no data)
+    - final_score: blended ranking score (0.7×profile + 0.3×preference); falls back to
+      profile score when no feedback events exist
 
     Jobs are scored in-memory — up to 500 candidates are evaluated, then
     the top results after filtering are returned.
@@ -66,6 +71,9 @@ async def get_recommendations(
             status_code=400,
             detail="No active profile found — create or upload a CV first",
         )
+
+    # Load preference profile once (single DB round-trip for all events)
+    prefs = await preference_service.get_preference_profile(db, current_user.id)
 
     jobs = await job_service.get_jobs_for_matching(
         db,
@@ -85,6 +93,10 @@ async def get_recommendations(
             job_dict = _job_to_dict(job)
             breakdown, confidence = scoring_service.score_job(job_dict, profile)
             mr = matching_engine.match(job_dict, profile)
+            pref_score = preference_service.compute_preference_score(job_dict, prefs)
+            final = preference_service.blend_scores(
+                breakdown.total, pref_score, has_preferences=prefs.has_preferences
+            )
 
             if breakdown.total < min_score:
                 continue
@@ -127,14 +139,52 @@ async def get_recommendations(
                     experience_gap=mr.experience_gap,
                     overall_fit=mr.overall_fit,
                 ),
+                preference_score=pref_score,
+                final_score=final,
             )
-            results.append((breakdown.total, rec))
+            results.append((final, rec))
         except Exception as exc:
             logger.warning("Skipping job %s in recommendations: %s", job.id, exc)
 
-    # Sort by total score descending, then paginate
+    # Sort by final_score descending (preference-aware), then paginate
     results.sort(key=lambda x: x[0], reverse=True)
     return [rec for _, rec in results[offset: offset + limit]]
+
+
+# ── Feedback recording — before /{job_id} to avoid route conflict ─────────────
+
+@router.post("/{job_id}/feedback", status_code=status.HTTP_201_CREATED, response_model=FeedbackEventRead)
+async def record_feedback(
+    job_id: uuid.UUID,
+    body: FeedbackCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> FeedbackEventRead:
+    """
+    Record a feedback event for a job (viewed, saved, applied, interview, rejected).
+    Multiple events of the same type are allowed; each is stored individually.
+    The preference learning agent aggregates them on next recommendation request.
+    """
+    job = await job_service.get_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    event = FeedbackEvent(
+        user_id=current_user.id,
+        job_id=job_id,
+        outcome=body.event_type,
+    )
+    db.add(event)
+    await db.commit()
+    await db.refresh(event)
+
+    return FeedbackEventRead(
+        id=event.id,
+        user_id=event.user_id,
+        job_id=event.job_id,
+        event_type=event.outcome,
+        created_at=event.created_at,
+    )
 
 
 # ── Single job (after literal routes) ────────────────────────────────────────
@@ -245,6 +295,7 @@ async def sync_jobs(
 def _job_to_dict(job) -> dict:
     return {
         "title": job.title,
+        "company_name": job.company_name,
         "required_skills": job.required_skills or [],
         "experience_level": job.experience_level,
         "location": job.location,
