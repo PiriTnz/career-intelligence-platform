@@ -70,7 +70,11 @@ async def save_score(
     confidence: int,
     explanation: str | None = None,
 ) -> Score:
-    """Upsert score for (job_id, user_id) pair."""
+    """Upsert score for (job_id, user_id) pair.
+
+    Flushes but does NOT commit — the caller owns the transaction.
+    This allows batch callers to commit once after processing many jobs.
+    """
     result = await db.execute(
         select(Score).where(Score.job_id == job_id, Score.user_id == user_id)
     )
@@ -94,8 +98,7 @@ async def save_score(
     if explanation is not None:
         score.llm_explanation = explanation
 
-    await db.commit()
-    await db.refresh(score)
+    await db.flush()
     return score
 
 
