@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,5 +50,56 @@ class ProfileRead(BaseModel):
     cities: list[str]
     contract_types: list[str]
     languages: list[str]
+    # CV-extracted enrichment (null when profile was created manually)
+    phone: str | None = None
+    certifications: list[str] = Field(default_factory=list)
+    education: list[Any] = Field(default_factory=list)
+    experience: list[Any] = Field(default_factory=list)
+    cv_file_path: str | None = None
     is_active: bool
     created_at: datetime
+
+
+class ProfileVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: uuid.UUID
+    profile_id: uuid.UUID | None
+    version: int
+    source: str
+    cv_file_path: str | None
+    full_name: str | None
+    phone: str | None
+    email_extracted: str | None
+    location_raw: str | None
+    education: list[Any]
+    experience: list[Any]
+    certifications: list[str]
+    extracted_skills: list[str]
+    inferred_skills: list[str]
+    missing_fields: list[str]
+    suggested_roles: list[str]
+    extraction_confidence: int
+    created_at: datetime
+
+
+class CVUploadResult(BaseModel):
+    """Returned immediately after a CV upload — no DB-level round-trip needed."""
+
+    profile_version_id: int
+    profile_id: uuid.UUID
+    profile_version: int
+    extraction_confidence: int
+    full_name: str | None
+    email_extracted: str | None
+    phone: str | None
+    location_raw: str | None
+    extracted_skills: list[str]
+    inferred_skills: list[str]
+    suggested_roles: list[str]
+    missing_fields: list[str]
+    education_count: int
+    experience_count: int
+    certifications: list[str]
+    message: str

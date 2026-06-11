@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,13 @@ class Profile(Base):
     cities: Mapped[list] = mapped_column(ARRAY(String), default=list, nullable=False)
     contract_types: Mapped[list] = mapped_column(ARRAY(String), default=list, nullable=False)
     languages: Mapped[list] = mapped_column(ARRAY(String), default=lambda: ["fr", "en"], nullable=False)
+
+    # CV-extracted enrichment fields (added in migration 0002)
+    phone: Mapped[str | None] = mapped_column(String(50))
+    certifications: Mapped[list] = mapped_column(ARRAY(String), default=list, nullable=False)
+    education: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    experience: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    cv_file_path: Mapped[str | None] = mapped_column(String(500))
 
     raw_json: Mapped[dict | None] = mapped_column(JSONB)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

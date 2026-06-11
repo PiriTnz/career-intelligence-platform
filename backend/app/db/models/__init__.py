@@ -1,6 +1,7 @@
 from .base import Base
 from .user import User
 from .profile import Profile
+from .profile_version import ProfileVersion
 from .company import Company
 from .job import Job
 from .application import Application
@@ -14,6 +15,7 @@ __all__ = [
     "Base",
     "User",
     "Profile",
+    "ProfileVersion",
     "Company",
     "Job",
     "Application",
