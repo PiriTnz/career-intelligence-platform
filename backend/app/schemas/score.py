@@ -64,3 +64,14 @@ class BatchComputeResult(BaseModel):
     already_scored: int
     skipped: int
     profile_version: int
+
+
+class GapAnalysisRead(BaseModel):
+    """Result of LLM-generated skill gap analysis for a specific job."""
+    job_id: uuid.UUID
+    job_title: str
+    company_name: str
+    analysis: str
+    missing_skills: list[str]
+    experience_gap: int
+    skill_match_percentage: float

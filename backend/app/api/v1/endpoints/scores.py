@@ -1,11 +1,12 @@
 """
 Score endpoints.
 
-GET  /scores                — list user's scores ordered by total desc, with job info
-GET  /scores/{job_id}       — single score for one job
-POST /scores/{job_id}/compute   — (re)compute deterministic score for one job
-POST /scores/{job_id}/explain   — generate LLM explanation (score unchanged)
-POST /scores/batch-compute      — score every unscored job in one transaction
+GET  /scores                      — list user's scores ordered by total desc, with job info
+GET  /scores/{job_id}             — single score for one job
+POST /scores/{job_id}/compute     — (re)compute deterministic score for one job
+POST /scores/{job_id}/explain     — generate LLM explanation (score unchanged)
+POST /scores/{job_id}/gap-analysis — generate LLM skill-gap advice (score unchanged)
+POST /scores/batch-compute        — score every unscored job in one transaction
 """
 from __future__ import annotations
 
@@ -13,16 +14,16 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
 from app.core.database import get_db
 from app.db.models import Job, Score, User
 from app.llm import get_provider
-from app.llm.explanations import explain_score
-from app.schemas.score import BatchComputeResult, ScoreRead, ScoreWithJobRead
-from app.services import job_service, scoring_service
+from app.llm.explanations import explain_match, gap_analysis
+from app.schemas.score import BatchComputeResult, GapAnalysisRead, ScoreRead, ScoreWithJobRead
+from app.services import job_service, matching_engine, scoring_service
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ async def batch_compute_scores(
     )
 
 
-# ── LLM explanation ───────────────────────────────────────────────────────────
+# ── LLM explanation (match-aware) ─────────────────────────────────────────────
 
 @router.post("/{job_id}/explain", response_model=ScoreRead)
 async def generate_explanation(
@@ -225,7 +226,7 @@ async def generate_explanation(
     current_user: User = Depends(get_current_active_user),
 ) -> Score:
     """
-    Generate an LLM explanation for an existing score.
+    Generate an LLM explanation for an existing score using both score and match data.
     The numeric score is never changed — only llm_explanation is updated.
     """
     result = await db.execute(
@@ -254,19 +255,28 @@ async def generate_explanation(
         freshness_score=score.freshness_score,
     )
 
+    job_dict = _job_to_dict(job)
+    mr = matching_engine.match(job_dict, profile)
+
     provider = get_provider()
-    explanation = await explain_score(
+    explanation = await explain_match(
         provider,
         job_title=job.title,
         company_name=job.company_name,
-        location=job.location,
-        remote=job.remote,
-        contract_type=job.contract_type,
-        required_skills=job.required_skills or [],
         breakdown=breakdown,
+        matched_skills=mr.matched_skills,
+        missing_skills=mr.missing_skills,
+        skill_match_percentage=mr.skill_match_percentage,
+        role_match_percentage=mr.role_match_percentage,
+        best_matching_role=mr.best_matching_role,
+        location_match=mr.location_match,
+        remote_match=mr.remote_match,
+        contract_match=mr.contract_match,
+        language_match=mr.language_match,
+        salary_ok=mr.salary_ok,
+        overall_fit=mr.overall_fit,
+        candidate_experience_level=profile.get("experience_level"),
         confidence=score.extraction_confidence,
-        candidate_skills=profile.get("skills", []),
-        candidate_cities=profile.get("cities", []),
     )
 
     if explanation:
@@ -277,10 +287,61 @@ async def generate_explanation(
     return score
 
 
+# ── LLM gap analysis ──────────────────────────────────────────────────────────
+
+@router.post("/{job_id}/gap-analysis", response_model=GapAnalysisRead)
+async def generate_gap_analysis(
+    job_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> GapAnalysisRead:
+    """
+    Generate actionable skill-gap advice for a specific job.
+    Does not require a pre-existing score. Score is never changed.
+    """
+    job = await job_service.get_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    profile = await job_service.get_profile_dict(db, current_user.id)
+    if not profile:
+        raise HTTPException(status_code=400, detail="No active profile — create a profile first")
+
+    job_dict = _job_to_dict(job)
+    mr = matching_engine.match(job_dict, profile)
+
+    provider = get_provider()
+    analysis_text = await gap_analysis(
+        provider,
+        job_title=job.title,
+        company_name=job.company_name,
+        required_skills=job.required_skills or [],
+        matched_skills=mr.matched_skills,
+        missing_skills=mr.missing_skills,
+        skill_match_percentage=mr.skill_match_percentage,
+        experience_gap=mr.experience_gap,
+        candidate_skills=profile.get("skills", []),
+        candidate_experience_level=profile.get("experience_level"),
+        job_experience_level=job.experience_level,
+    )
+
+    return GapAnalysisRead(
+        job_id=job_id,
+        job_title=job.title,
+        company_name=job.company_name,
+        analysis=analysis_text,
+        missing_skills=mr.missing_skills,
+        experience_gap=mr.experience_gap,
+        skill_match_percentage=mr.skill_match_percentage,
+    )
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _job_to_dict(job: Job) -> dict:
     return {
+        "title": job.title,
+        "company_name": job.company_name,
         "required_skills": job.required_skills or [],
         "experience_level": job.experience_level,
         "location": job.location,
@@ -290,4 +351,5 @@ def _job_to_dict(job: Job) -> dict:
         "salary_max": job.salary_max,
         "published_at": job.published_at,
         "company_quality_score": 50,
+        "language": getattr(job, "language", "fr"),
     }

@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-import httpx
 
-from app.core.config import settings
 from app.core.database import get_db
 from app.llm import get_provider
+from app.llm.ollama import OllamaProvider
 
 router = APIRouter()
 
@@ -22,9 +21,7 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
         pass
 
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.get(f"{settings.ollama_url}/api/tags")
-            ollama_ok = resp.status_code == 200
+        ollama_ok = await OllamaProvider().health_check()
     except Exception:
         pass
 
