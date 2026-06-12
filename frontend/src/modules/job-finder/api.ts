@@ -5,6 +5,8 @@ import type {
   ProfileCompleteness,
   Application,
   FeedbackEventType,
+  WorkspaceResponse,
+  PipelineItem,
 } from './types'
 
 export type { FeedbackEventType }
@@ -39,5 +41,20 @@ export const getProfileCompleteness = async (): Promise<ProfileCompleteness> => 
 
 export const getApplications = async (): Promise<Application[]> => {
   const { data } = await client.get<Application[]>('/api/v1/applications/')
+  return data
+}
+
+export const prepareWorkspace = async (jobId: string): Promise<WorkspaceResponse> => {
+  const { data } = await client.post<WorkspaceResponse>(`/api/v1/interview/prepare/${jobId}`)
+  return data
+}
+
+export const getWorkspace = async (jobId: string): Promise<WorkspaceResponse> => {
+  const { data } = await client.get<WorkspaceResponse>(`/api/v1/interview/workspace/${jobId}`)
+  return data
+}
+
+export const getApplicationPipeline = async (): Promise<PipelineItem[]> => {
+  const { data } = await client.get<PipelineItem[]>('/api/v1/interview/application-pipeline')
   return data
 }

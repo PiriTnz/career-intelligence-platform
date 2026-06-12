@@ -1,9 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   X, ExternalLink, MapPin, Clock, Bookmark, Send,
   PhoneCall, Sparkles, Target, Brain, ChevronRight,
-  AlertCircle
+  AlertCircle, LayoutDashboard,
 } from 'lucide-react'
 import type { JobRecommendation, FeedbackEventType } from '../../types'
 import { useGapAnalysis } from '../../hooks'
@@ -11,6 +11,9 @@ import { getScoreColor, formatSalary, formatDate, getRemoteLabel, getContractLab
 import ScoreRing from '../ui/ScoreRing'
 import ScoreBadge from '../ui/ScoreBadge'
 import SkillTag from '../ui/SkillTag'
+import WorkspaceTab from './WorkspaceTab'
+
+type DrawerTab = 'overview' | 'workspace'
 
 interface Props {
   job: JobRecommendation | null
@@ -41,6 +44,7 @@ function ScoreRow({ label, value, max = 100 }: { label: string; value: number; m
 
 export default function JobDrawer({ job, onClose, onFeedback, feedbackPending }: Props) {
   const { data: gapAnalysis, isLoading: gapLoading, error: gapError } = useGapAnalysis(job?.job_id ?? null)
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>('overview')
 
   // Close on Escape
   useEffect(() => {
@@ -55,6 +59,11 @@ export default function JobDrawer({ job, onClose, onFeedback, feedbackPending }:
     else document.body.style.overflow = ''
     return () => { document.body.style.overflow = '' }
   }, [job])
+
+  // Reset to overview when a different job is opened
+  useEffect(() => {
+    setDrawerTab('overview')
+  }, [job?.job_id])
 
   const actions: Array<{ type: FeedbackEventType; icon: typeof Bookmark; label: string; primary?: boolean }> = [
     { type: 'saved', icon: Bookmark, label: 'Save' },
@@ -115,8 +124,44 @@ export default function JobDrawer({ job, onClose, onFeedback, feedbackPending }:
               </div>
             </div>
 
+            {/* Tab switcher */}
+            <div className="flex-shrink-0 border-b border-slate-100 px-6">
+              <div className="flex gap-0">
+                {([
+                  { id: 'overview' as DrawerTab, label: 'Overview', icon: LayoutDashboard },
+                  { id: 'workspace' as DrawerTab, label: 'Workspace', icon: Sparkles },
+                ] as const).map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setDrawerTab(id)}
+                    className={`relative flex items-center gap-1.5 px-4 py-3 text-xs font-medium transition-all ${
+                      drawerTab === id
+                        ? 'text-brand-600'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <Icon size={13} />
+                    {label}
+                    {drawerTab === id && (
+                      <motion.div
+                        layoutId="drawer-tab-indicator"
+                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500 rounded-t-full"
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto scroll-thin p-6 space-y-6">
+
+              {/* Workspace tab */}
+              {drawerTab === 'workspace' && <WorkspaceTab job={job} />}
+
+              {/* Overview tab content */}
+              {drawerTab === 'overview' && <>
 
               {/* Meta */}
               <div className="flex flex-wrap gap-2">
@@ -262,6 +307,8 @@ export default function JobDrawer({ job, onClose, onFeedback, feedbackPending }:
                   ))}
                 </div>
               </section>
+
+              </>}
             </div>
 
             {/* Footer actions */}

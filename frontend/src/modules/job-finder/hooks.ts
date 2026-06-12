@@ -48,3 +48,23 @@ export function useApplications() {
     staleTime: 30_000,
   })
 }
+
+export function useWorkspace(jobId: string | null) {
+  return useQuery({
+    queryKey: ['job-finder', 'workspace', jobId],
+    queryFn: () => api.getWorkspace(jobId!),
+    enabled: !!jobId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
+export function usePrepareWorkspace() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => api.prepareWorkspace(jobId),
+    onSuccess: (data, jobId) => {
+      qc.setQueryData(['job-finder', 'workspace', jobId], data)
+    },
+  })
+}

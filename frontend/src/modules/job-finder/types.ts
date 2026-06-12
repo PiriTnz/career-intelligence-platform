@@ -105,3 +105,55 @@ export interface ScoreColor {
   label: string
   gradient: string
 }
+
+// ── Interview Workspace ───────────────────────────────────────────────────────
+
+export interface InterviewReadiness {
+  label: 'excellent' | 'strong' | 'moderate' | 'weak'
+  score: number
+  explanation: string
+}
+
+export interface TransferableMatch {
+  skill: string
+  via: string
+  family: string
+  rationale: string
+}
+
+export interface RecruiterConcern {
+  skill: string
+  concern: string
+}
+
+export interface MitigationStrategy {
+  skill: string
+  strategy: string
+}
+
+export interface WorkspaceResponse {
+  job_id: string
+  verified_matches: string[]
+  transferable_matches: TransferableMatch[]
+  learning_skills: string[]
+  real_gaps: string[]
+  recruiter_concerns: RecruiterConcern[]
+  mitigation_strategies: MitigationStrategy[]
+  cv_draft: string
+  cover_letter_draft: string
+  readiness: InterviewReadiness
+  warnings: string[]
+}
+
+export interface PipelineItem {
+  job_id: string
+  job_title: string
+  company_name: string
+  stage: string
+  readiness_label: string | null
+  readiness_score: number | null
+  has_workspace: boolean
+  has_application: boolean
+  application_id: string | null
+  application_status: string | null
+}
