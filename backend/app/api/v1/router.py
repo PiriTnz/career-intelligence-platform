@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     auth,
     cover_letters,
     cv_versions,
+    enrichment,
     health,
     interview,
     jobs,
@@ -38,3 +39,6 @@ router.include_router(opportunities.router)
 
 # Interview Optimization Workspace
 router.include_router(interview.router, prefix="/interview", tags=["interview"])
+
+# Job-Aware Profile Enrichment Agent
+router.include_router(enrichment.router, prefix="/enrichment", tags=["enrichment"])

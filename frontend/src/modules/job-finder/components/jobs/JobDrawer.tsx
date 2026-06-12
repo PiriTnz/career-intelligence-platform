@@ -155,7 +155,7 @@ export default function JobDrawer({ job, onClose, onFeedback, feedbackPending }:
             </div>
 
             {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto scroll-thin p-6 space-y-6">
+            <div className={`flex-1 overflow-y-auto scroll-thin ${drawerTab === 'overview' ? 'p-6 space-y-6' : ''}`}>
 
               {/* Workspace tab */}
               {drawerTab === 'workspace' && <WorkspaceTab job={job} />}

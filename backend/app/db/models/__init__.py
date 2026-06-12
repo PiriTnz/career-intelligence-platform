@@ -17,6 +17,7 @@ from .application_package import ApplicationPackage
 from .skill_evidence import SkillEvidence
 from .evidence_pending import EvidencePending
 from .interview_workspace import InterviewWorkspace
+from .job_enrichment_session import JobEnrichmentSession
 
 __all__ = [
     "Base",
@@ -38,4 +39,5 @@ __all__ = [
     "SkillEvidence",
     "EvidencePending",
     "InterviewWorkspace",
+    "JobEnrichmentSession",
 ]
