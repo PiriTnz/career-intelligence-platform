@@ -1,0 +1,321 @@
+{
+  "name": "Job Hunter — Scraper + Score",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.indeed.com/rss?q=alternance+AI+engineer&l=Lyon&sort=date",
+        "options": {}
+      },
+      "id": "indeed-rss",
+      "name": "Indeed RSS — Lyon AI",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://www.indeed.com/rss?q=alternance+DevOps&l=Lyon&sort=date",
+        "options": {}
+      },
+      "id": "indeed-rss-devops",
+      "name": "Indeed RSS — Lyon DevOps",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [460, 380]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-feeds",
+      "name": "Merge feeds",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst normalized = [];\n\nfor (const item of items) {\n  const raw = item.json;\n  \n  // Extract salary from title/description\n  const salaryMatch = (raw.title + ' ' + (raw.contentSnippet || '')).match(/(\\d+)k?\\s*[-–]\\s*(\\d+)k?\\s*€/);\n  let salaryMin = null, salaryMax = null;\n  if (salaryMatch) {\n    salaryMin = parseInt(salaryMatch[1]) * (salaryMatch[1].length <= 2 ? 1000 : 1);\n    salaryMax = parseInt(salaryMatch[2]) * (salaryMatch[2].length <= 2 ? 1000 : 1);\n  }\n\n  // Detect contract type\n  const text = (raw.title + ' ' + (raw.contentSnippet || '')).toLowerCase();\n  let contract_type = 'cdi';\n  if (text.includes('alternance') || text.includes('apprentissage')) contract_type = 'alternance';\n  else if (text.includes('stage') || text.includes('internship')) contract_type = 'stage';\n  else if (text.includes('cdd')) contract_type = 'cdd';\n  else if (text.includes('freelance')) contract_type = 'freelance';\n\n  // Detect remote\n  let remote = 'none';\n  if (text.includes('full remote') || text.includes('100% remote') || text.includes('télétravail complet')) remote = 'full';\n  else if (text.includes('hybrid') || text.includes('hybride') || text.includes('télétravail partiel')) remote = 'hybrid';\n\n  // Extract skills\n  const skillKeywords = ['python','javascript','typescript','react','docker','kubernetes',\n    'fastapi','django','aws','gcp','azure','postgresql','redis','llm','rag',\n    'langchain','ollama','machine learning','devops','ci/cd','linux','n8n','c#','java'];\n  const requiredSkills = skillKeywords.filter(s => text.includes(s));\n\n  // Experience level\n  let experience_level = 'junior';\n  if (text.includes('senior') || text.includes('5 ans') || text.includes('5 years')) experience_level = 'senior';\n  else if (text.includes('confirmé') || text.includes('3 ans') || text.includes('mid')) experience_level = 'mid';\n\n  // Language detection\n  const frMarkers = ['nous recherchons','poste','entreprise','expérience','compétences','rejoindre'];\n  const language = frMarkers.some(m => text.includes(m)) ? 'fr' : 'en';\n\n  normalized.push({\n    json: {\n      source: 'indeed',\n      source_id: raw.guid || raw.link,\n      url: raw.link || raw.guid,\n      title: raw.title || '',\n      company_name: raw.creator || raw['dc:creator'] || 'Unknown',\n      location: raw.location || 'Lyon',\n      contract_type,\n      salary_min: salaryMin,\n      salary_max: salaryMax,\n      remote,\n      required_skills: requiredSkills,\n      experience_level,\n      language,\n      description: raw.contentSnippet || raw.content || '',\n      published_at: raw.isoDate || raw.pubDate || new Date().toISOString(),\n      scraped_at: new Date().toISOString()\n    }\n  });\n}\n\nreturn normalized;"
+      },
+      "id": "normalizer",
+      "name": "Normalize jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Deterministic scorer — no LLM\nconst items = $input.all();\n\n// Hardcoded profile for now — Phase 1\n// Will be replaced by DB lookup in Phase 2\nconst profile = {\n  target_roles: ['AI Engineer', 'LLM Engineer', 'ML Engineer', 'DevOps Engineer'],\n  avoid_roles: ['Data Analyst', 'Support Engineer', 'Helpdesk'],\n  skills: ['python', 'docker', 'llm', 'rag', 'fastapi', 'postgresql', 'c#', 'linux'],\n  salary_min: 38000,\n  salary_target: 45000,\n  remote_preference: true,\n  cities: ['lyon', 'paris', 'grenoble'],\n  countries: ['france'],\n  contract_types: ['alternance', 'cdi'],\n  experience_level: 'junior'\n};\n\nconst CONFIDENCE_THRESHOLD = 40;\nconst SCORE_THRESHOLD = 40;\n\nfunction scoreJob(job, profile) {\n  // 1. Skill match (30pts)\n  const required = new Set(job.required_skills.map(s => s.toLowerCase()));\n  const userSkills = new Set(profile.skills.map(s => s.toLowerCase()));\n  let skillMatch = 0;\n  if (required.size === 0) {\n    skillMatch = 15;\n  } else {\n    const matched = [...required].filter(s => userSkills.has(s)).length;\n    skillMatch = Math.round((matched / required.size) * 30);\n  }\n\n  // 2. Experience match (20pts)\n  const levelMap = { junior: 1, mid: 2, senior: 3 };\n  const jobLevel = levelMap[job.experience_level] || 1;\n  const userLevel = levelMap[profile.experience_level] || 1;\n  const diff = Math.abs(jobLevel - userLevel);\n  const experienceMatch = diff === 0 ? 20 : diff === 1 ? 10 : 0;\n\n  // 3. Location (15pts)\n  const jobLocation = (job.location || '').toLowerCase();\n  let locationScore = 0;\n  if (job.remote === 'full' && profile.remote_preference) locationScore = 15;\n  else if (profile.cities.some(c => jobLocation.includes(c))) locationScore = 15;\n  else if (profile.countries.some(c => jobLocation.includes(c))) locationScore = 8;\n  else if (job.remote === 'hybrid') locationScore = 6;\n\n  // 4. Salary (15pts)\n  let salaryScore = 7; // unknown = half\n  if (job.salary_min || job.salary_max) {\n    const mid = ((job.salary_min || 0) + (job.salary_max || job.salary_min || 0)) / 2;\n    if (mid >= profile.salary_target) salaryScore = 15;\n    else if (mid >= profile.salary_min) salaryScore = Math.round(((mid - profile.salary_min) / (profile.salary_target - profile.salary_min + 1)) * 15);\n    else salaryScore = 0;\n  }\n\n  // 5. Contract (10pts)\n  const contractScore = profile.contract_types.includes(job.contract_type) ? 10 : 0;\n\n  // 6. Company (5pts) — default 50 quality for now\n  const companyScore = Math.round((50 / 100) * 5);\n\n  // 7. Freshness (5pts)\n  let freshnessScore = 2;\n  if (job.published_at) {\n    const ageDays = (Date.now() - new Date(job.published_at).getTime()) / (1000 * 60 * 60 * 24);\n    if (ageDays <= 2) freshnessScore = 5;\n    else if (ageDays <= 7) freshnessScore = 3;\n    else if (ageDays <= 14) freshnessScore = 1;\n    else freshnessScore = 0;\n  }\n\n  const total = skillMatch + experienceMatch + locationScore + salaryScore + contractScore + companyScore + freshnessScore;\n\n  // Extraction confidence\n  const fields = ['required_skills', 'experience_level', 'salary_min', 'location', 'contract_type'];\n  const filled = fields.filter(f => {\n    const v = job[f];\n    return v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0);\n  }).length;\n  const confidence = Math.round((filled / fields.length) * 100);\n\n  // Avoid roles check\n  const titleLower = job.title.toLowerCase();\n  const avoided = profile.avoid_roles.some(r => titleLower.includes(r.toLowerCase()));\n\n  return {\n    skill_match: skillMatch,\n    experience_match: experienceMatch,\n    location_score: locationScore,\n    salary_score: salaryScore,\n    contract_score: contractScore,\n    company_score: companyScore,\n    freshness_score: freshnessScore,\n    total,\n    extraction_confidence: confidence,\n    needs_review: total >= 60 && confidence < 60,\n    avoided\n  };\n}\n\nconst results = [];\nfor (const item of items) {\n  const job = item.json;\n  const score = scoreJob(job, profile);\n\n  // Auto-archive if avoided role or score too low\n  let status = 'found';\n  if (score.avoided || score.total < SCORE_THRESHOLD) status = 'archived';\n  else if (score.total >= 70) status = 'shortlisted';\n\n  results.push({\n    json: {\n      ...job,\n      score,\n      status\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "scorer",
+      "name": "Score jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "not-archived",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "archived",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-archived",
+      "name": "Filter — skip archived",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/jobs/upsert",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "source",
+              "value": "={{ $json.source }}"
+            },
+            {
+              "name": "url",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "company_name",
+              "value": "={{ $json.company_name }}"
+            },
+            {
+              "name": "location",
+              "value": "={{ $json.location }}"
+            },
+            {
+              "name": "contract_type",
+              "value": "={{ $json.contract_type }}"
+            },
+            {
+              "name": "remote",
+              "value": "={{ $json.remote }}"
+            },
+            {
+              "name": "required_skills",
+              "value": "={{ $json.required_skills }}"
+            },
+            {
+              "name": "experience_level",
+              "value": "={{ $json.experience_level }}"
+            },
+            {
+              "name": "language",
+              "value": "={{ $json.language }}"
+            },
+            {
+              "name": "salary_min",
+              "value": "={{ $json.salary_min }}"
+            },
+            {
+              "name": "salary_max",
+              "value": "={{ $json.salary_max }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.description }}"
+            },
+            {
+              "name": "published_at",
+              "value": "={{ $json.published_at }}"
+            },
+            {
+              "name": "score",
+              "value": "={{ $json.score }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-to-db",
+      "name": "Save to DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "id": "is-shortlisted",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "shortlisted",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-shortlisted",
+      "name": "Filter — shortlisted only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1560, 480]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🎯 New shortlisted job!\n\n*{{ $json.title }}*\n{{ $json.company_name }} — {{ $json.location }}\nContract: {{ $json.contract_type }} | Remote: {{ $json.remote }}\nScore: *{{ $json.score.total }}/100*\n\nSkills found: {{ $json.required_skills.join(', ') }}\n\n🔗 {{ $json.url }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-notify",
+      "name": "Telegram notify",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1780, 480]
+    }
+  ],
+  "connections": {
+    "Every 6 hours": {
+      "main": [
+        [
+          {
+            "node": "Indeed RSS — Lyon AI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Indeed RSS — Lyon DevOps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Indeed RSS — Lyon AI": {
+      "main": [
+        [
+          {
+            "node": "Merge feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Indeed RSS — Lyon DevOps": {
+      "main": [
+        [
+          {
+            "node": "Merge feeds",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge feeds": {
+      "main": [
+        [
+          {
+            "node": "Normalize jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize jobs": {
+      "main": [
+        [
+          {
+            "node": "Score jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score jobs": {
+      "main": [
+        [
+          {
+            "node": "Filter — skip archived",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter — shortlisted only",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter — skip archived": {
+      "main": [
+        [
+          {
+            "node": "Save to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter — shortlisted only": {
+      "main": [
+        [
+          {
+            "node": "Telegram notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
