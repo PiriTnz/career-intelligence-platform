@@ -198,7 +198,7 @@ def analyze_requirements(
     Classify each required skill into one of three categories.
     Pure function — no DB, no LLM.
 
-    already_verified  — skill is in profile or KB.verified
+    verified  — skill is in profile or KB.verified
     partially_verified — skill is in KB.learning OR a transferable family bridge exists
     unknown           — no evidence at all
     """
@@ -219,7 +219,7 @@ def analyze_requirements(
             gaps.append(
                 GapItem(
                     requirement=req,
-                    classification="already_verified",
+                    classification="verified",
                     rationale=f"'{req}' is verified in your profile or knowledge base.",
                 )
             )
@@ -272,13 +272,13 @@ def analyze_requirements(
 def generate_questions(gaps: list[GapItem]) -> list[QuestionItem]:
     """
     Generate targeted questions for gaps that need clarification.
-    Skips already_verified gaps — no question needed.
+    Skips verified gaps — no question needed.
     Pure function.
     """
     questions: list[QuestionItem] = []
     idx = 0
     for gap in gaps:
-        if gap.classification == "already_verified":
+        if gap.classification == "verified":
             continue
         qtype = _detect_question_type(gap.requirement)
         text = _build_question_text(
@@ -417,7 +417,7 @@ async def start_session(
     """
     Analyse job requirements against the user's current profile and KB.
     Create and persist a new enrichment session.
-    Returns (session, gaps) — gaps include already_verified for transparency.
+    Returns (session, gaps) — gaps include verified for transparency.
     """
     # Load job
     job_result = await db.execute(select(Job).where(Job.id == job_id))

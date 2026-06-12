@@ -43,7 +43,7 @@ async def start_enrichment_session(
     gap_objects = [GapItem(**g) for g in session.detected_gaps]
     question_objects = [QuestionItem(**q) for q in session.generated_questions]
 
-    already_verified = sum(1 for g in gap_objects if g.classification == "already_verified")
+    verified = sum(1 for g in gap_objects if g.classification == "verified")
 
     # Load job title/company for response context
     from sqlalchemy import select
@@ -57,7 +57,7 @@ async def start_enrichment_session(
         job_title=job.title if job else "Unknown",
         company_name=job.company_name if job else "Unknown",
         total_requirements=len(gap_objects),
-        already_verified_count=already_verified,
+        verified_count=verified,
         question_count=len(question_objects),
         questions=question_objects,
     )

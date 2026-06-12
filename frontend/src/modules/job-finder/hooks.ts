@@ -68,3 +68,41 @@ export function usePrepareWorkspace() {
     },
   })
 }
+
+// ── Evidence Discovery / Enrichment ───────────────────────────────────────────
+
+export function useEnrichmentStatus(jobId: string | null) {
+  return useQuery({
+    queryKey: ['job-finder', 'enrichment-status', jobId],
+    queryFn: () => api.getEnrichmentStatus(jobId!),
+    enabled: !!jobId,
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+export function useStartEnrichment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => api.startEnrichmentSession(jobId),
+    onSuccess: (_, jobId) => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'enrichment-status', jobId] })
+    },
+  })
+}
+
+export function useSubmitAnswer() {
+  return useMutation({
+    mutationFn: api.submitEnrichmentAnswer,
+  })
+}
+
+export function useConfirmEnrichment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.confirmEnrichment,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'enrichment-status'] })
+    },
+  })
+}

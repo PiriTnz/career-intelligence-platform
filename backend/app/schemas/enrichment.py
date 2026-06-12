@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 # ── Gap classification ─────────────────────────────────────────────────────────
 
-GapClassification = Literal["already_verified", "partially_verified", "unknown"]
+GapClassification = Literal["verified", "partially_verified", "unknown"]
 
 EvidenceType = Literal["professional", "project", "academic", "learning", "verified", "rejected"]
 
@@ -72,7 +72,7 @@ class StartSessionResponse(BaseModel):
     job_title: str
     company_name: str
     total_requirements: int
-    already_verified_count: int
+    verified_count: int
     question_count: int
     questions: list[QuestionItem]
 

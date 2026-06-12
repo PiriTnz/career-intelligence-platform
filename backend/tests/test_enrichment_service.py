@@ -32,15 +32,15 @@ def _kb(*skills_and_statuses: tuple[str, str]):
 # ── analyze_requirements ───────────────────────────────────────────────────────
 
 class TestAnalyzeRequirements:
-    def test_skill_in_profile_is_already_verified(self):
+    def test_skill_in_profile_is_verified(self):
         gaps = analyze_requirements(["python"], ["Python", "Docker"], [])
         assert len(gaps) == 1
-        assert gaps[0].classification == "already_verified"
+        assert gaps[0].classification == "verified"
 
-    def test_skill_in_kb_verified_is_already_verified(self):
+    def test_skill_in_kb_verified_is_verified(self):
         kb = _kb(("terraform", "verified"))
         gaps = analyze_requirements(["terraform"], [], kb)
-        assert gaps[0].classification == "already_verified"
+        assert gaps[0].classification == "verified"
 
     def test_skill_in_kb_learning_is_partially_verified(self):
         kb = _kb(("azure", "learning"))
@@ -65,22 +65,22 @@ class TestAnalyzeRequirements:
             ["python"],
             [],
         )
-        assert gaps[0].classification == "already_verified"
+        assert gaps[0].classification == "verified"
         assert gaps[2].classification == "unknown"
 
-    def test_already_verified_never_generates_question(self):
+    def test_verified_never_generates_question(self):
         gaps = analyze_requirements(["python"], ["Python"], [])
         questions = generate_questions(gaps)
         assert len(questions) == 0
 
     def test_case_insensitive_profile_match(self):
         gaps = analyze_requirements(["Python"], ["PYTHON"], [])
-        assert gaps[0].classification == "already_verified"
+        assert gaps[0].classification == "verified"
 
     def test_case_insensitive_kb_match(self):
         kb = _kb(("TerraForm", "verified"))
         gaps = analyze_requirements(["terraform"], [], kb)
-        assert gaps[0].classification == "already_verified"
+        assert gaps[0].classification == "verified"
 
 
 # ── generate_questions ─────────────────────────────────────────────────────────

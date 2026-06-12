@@ -157,3 +157,60 @@ export interface PipelineItem {
   application_id: string | null
   application_status: string | null
 }
+
+// ── Evidence Discovery / Enrichment ───────────────────────────────────────────
+
+export type GapClassification = 'verified' | 'partially_verified' | 'unknown'
+export type EvidenceType = 'professional' | 'project' | 'academic' | 'learning' | 'rejected'
+export type SuggestedStatus = 'verified' | 'learning' | 'rejected'
+export type EnrichmentSessionStatus = 'pending' | 'answering' | 'confirmed' | 'enriched'
+
+export interface EnrichmentQuestion {
+  id: string
+  requirement: string
+  question: string
+  question_type: string
+  classification: GapClassification
+}
+
+export interface EnrichmentAnswerResult {
+  question_id: string
+  requirement: string
+  answer_text: string
+  evidence_type: EvidenceType
+  suggested_status: SuggestedStatus
+}
+
+export interface EnrichmentStatus {
+  job_id: string
+  has_open_session: boolean
+  session_id: string | null
+  session_status: EnrichmentSessionStatus | null
+  unanswered_questions: number
+  enriched_skills: string[]
+}
+
+export interface StartEnrichmentResponse {
+  session_id: string
+  job_id: string
+  job_title: string
+  company_name: string
+  total_requirements: number
+  verified_count: number
+  question_count: number
+  questions: EnrichmentQuestion[]
+}
+
+export interface ConfirmationItem {
+  question_id: string
+  requirement: string
+  confirmed: boolean
+  evidence_note: string | null
+  suggested_status: SuggestedStatus
+}
+
+export interface ConfirmEnrichmentResponse {
+  enriched_count: number
+  enriched_skills: string[]
+  session_status: EnrichmentSessionStatus
+}

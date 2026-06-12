@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { JobRecommendation } from '../../types'
 import { useWorkspace, usePrepareWorkspace } from '../../hooks'
+import EnrichmentPanel from './EnrichmentPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -238,6 +239,7 @@ export default function WorkspaceTab({ job }: Props) {
     ...(workspace.transferable_matches.length > 0 ? [{ key: 'transferable', label: 'Transferable' }] : []),
     ...(workspace.recruiter_concerns.length > 0 ? [{ key: 'concerns', label: 'Concerns' }] : []),
     ...(workspace.mitigation_strategies.length > 0 ? [{ key: 'mitigation', label: 'Mitigation' }] : []),
+    { key: 'enrich', label: 'Discover' },
     ...(workspace.cv_draft ? [{ key: 'cv', label: 'CV' }] : []),
     ...(workspace.cover_letter_draft ? [{ key: 'letter', label: 'Letter' }] : []),
     { key: 'apply', label: 'Apply' },
@@ -599,6 +601,27 @@ export default function WorkspaceTab({ job }: Props) {
           </section>
         </>
       )}
+
+      {/* ── Section 5b: Evidence Discovery ───────────────────────────────────── */}
+      <Divider />
+      <section
+        ref={makeRef('enrich')}
+        className="px-6 py-8 bg-white"
+      >
+        <div className="flex items-center gap-2 mb-1.5">
+          <Sparkles size={13} className="text-amber-500" />
+          <span className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-500">
+            Evidence Discovery
+          </span>
+        </div>
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1">
+          Surface hidden experience
+        </h2>
+        <p className="text-sm text-slate-400 mb-5 leading-relaxed">
+          Targeted questions based on this role's gaps. Confirmed answers improve your CV and cover letter.
+        </p>
+        <EnrichmentPanel jobId={job.job_id} />
+      </section>
 
       {/* ── Section 6: CV Evolution ───────────────────────────────────────────── */}
       {workspace.cv_draft && (

@@ -7,6 +7,11 @@ import type {
   FeedbackEventType,
   WorkspaceResponse,
   PipelineItem,
+  EnrichmentStatus,
+  StartEnrichmentResponse,
+  EnrichmentAnswerResult,
+  ConfirmationItem,
+  ConfirmEnrichmentResponse,
 } from './types'
 
 export type { FeedbackEventType }
@@ -56,5 +61,34 @@ export const getWorkspace = async (jobId: string): Promise<WorkspaceResponse> =>
 
 export const getApplicationPipeline = async (): Promise<PipelineItem[]> => {
   const { data } = await client.get<PipelineItem[]>('/api/v1/interview/application-pipeline')
+  return data
+}
+
+// ── Evidence Discovery / Enrichment ───────────────────────────────────────────
+
+export const getEnrichmentStatus = async (jobId: string): Promise<EnrichmentStatus> => {
+  const { data } = await client.get<EnrichmentStatus>(`/api/v1/enrichment/status/${jobId}`)
+  return data
+}
+
+export const startEnrichmentSession = async (jobId: string): Promise<StartEnrichmentResponse> => {
+  const { data } = await client.post<StartEnrichmentResponse>(`/api/v1/enrichment/start/${jobId}`)
+  return data
+}
+
+export const submitEnrichmentAnswer = async (params: {
+  session_id: string
+  question_id: string
+  answer_text: string
+}): Promise<EnrichmentAnswerResult> => {
+  const { data } = await client.post<EnrichmentAnswerResult>('/api/v1/enrichment/answer', params)
+  return data
+}
+
+export const confirmEnrichment = async (params: {
+  session_id: string
+  confirmations: ConfirmationItem[]
+}): Promise<ConfirmEnrichmentResponse> => {
+  const { data } = await client.post<ConfirmEnrichmentResponse>('/api/v1/enrichment/confirm', params)
   return data
 }
