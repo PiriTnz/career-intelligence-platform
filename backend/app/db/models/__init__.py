@@ -13,6 +13,10 @@ from .agent_log import AgentLog
 from .opportunity import Opportunity
 from .opportunity_preference import OpportunityPreference
 from .opportunity_feedback import OpportunityFeedback
+from .application_package import ApplicationPackage
+from .skill_evidence import SkillEvidence
+from .evidence_pending import EvidencePending
+from .interview_workspace import InterviewWorkspace
 
 __all__ = [
     "Base",
@@ -30,4 +34,8 @@ __all__ = [
     "Opportunity",
     "OpportunityPreference",
     "OpportunityFeedback",
+    "ApplicationPackage",
+    "SkillEvidence",
+    "EvidencePending",
+    "InterviewWorkspace",
 ]

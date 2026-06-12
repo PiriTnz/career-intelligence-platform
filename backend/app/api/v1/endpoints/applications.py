@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.db.models import Application, User
+from app.llm import get_provider
 from app.schemas.application import ApplicationCreate, ApplicationRead, ApplicationStatusUpdate
+from app.schemas.application_package import PreparePackageResponse, RequirementAnalysis, TransferableSkill
+from app.services import application_package_service
 
 router = APIRouter()
 
@@ -105,3 +108,75 @@ async def delete_application(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
     await db.delete(app)
     await db.commit()
+
+
+# ── Application Package endpoints ─────────────────────────────────────────────
+
+def _build_analysis_response(data: dict) -> RequirementAnalysis:
+    return RequirementAnalysis(
+        verified_match=data.get("verified_match", []),
+        transferable_match=[
+            TransferableSkill(**t) for t in data.get("transferable_match", [])
+        ],
+        real_gap=data.get("real_gap", []),
+    )
+
+
+@router.post("/{job_id}/prepare", response_model=PreparePackageResponse)
+async def prepare_application_package(
+    job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PreparePackageResponse:
+    """
+    Generate an evidence-based application package (CV draft + cover letter)
+    for the given job. Saves the result; re-running updates the existing package.
+
+    Classification, scoring, and warnings are deterministic.
+    LLM is used only for text generation.
+    """
+    provider = get_provider()
+    try:
+        pkg = await application_package_service.prepare_application_package(
+            db, current_user.id, job_id, provider
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if "not found" in detail.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    return PreparePackageResponse(
+        job_id=job_id,
+        cv_draft=pkg.cv_draft,
+        cover_letter_draft=pkg.cover_letter_draft,
+        requirement_analysis=_build_analysis_response(pkg.requirement_analysis),
+        warnings=pkg.warnings,
+        ready_to_apply_score=pkg.ready_to_apply_score,
+    )
+
+
+@router.get("/{job_id}/package", response_model=PreparePackageResponse)
+async def get_application_package(
+    job_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PreparePackageResponse:
+    """Retrieve a previously generated application package for the given job."""
+    pkg = await application_package_service.get_application_package(
+        db, current_user.id, job_id
+    )
+    if pkg is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No package found for this job. Call POST /{job_id}/prepare first.",
+        )
+
+    return PreparePackageResponse(
+        job_id=job_id,
+        cv_draft=pkg.cv_draft,
+        cover_letter_draft=pkg.cover_letter_draft,
+        requirement_analysis=_build_analysis_response(pkg.requirement_analysis),
+        warnings=pkg.warnings,
+        ready_to_apply_score=pkg.ready_to_apply_score,
+    )

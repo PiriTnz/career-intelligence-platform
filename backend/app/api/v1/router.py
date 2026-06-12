@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     cover_letters,
     cv_versions,
     health,
+    interview,
     jobs,
     opportunities,
     profiles,
@@ -34,3 +35,6 @@ router.include_router(sources.router, prefix="/sources", tags=["sources"])
 
 # Opportunity Discovery Agent — prefix carried in router definition
 router.include_router(opportunities.router)
+
+# Interview Optimization Workspace
+router.include_router(interview.router, prefix="/interview", tags=["interview"])
