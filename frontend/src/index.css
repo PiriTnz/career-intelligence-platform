@@ -1,3 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-primary:    #f8f7ff;
+    --bg-glass:      rgba(255, 255, 255, 0.75);
+    --bg-glass-dark: rgba(255, 255, 255, 0.04);
+    --border-glass:  rgba(255, 255, 255, 0.3);
+    --shadow-glass:  0 8px 32px rgba(31, 38, 135, 0.12);
+
+    --score-excellent: #10b981;
+    --score-strong:    #60a5fa;
+    --score-moderate:  #fbbf24;
+    --score-weak:      #f87171;
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans;
+  }
+}
+
+@layer components {
+  /* Premium glass card */
+  .glass {
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-dark {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Subtle card */
+  .card {
+    @apply bg-white rounded-2xl border border-slate-100 shadow-card;
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #6366f1 0%, #8b5cf6 60%, #a78bfa 100%);
+  }
+
+  /* Score ring */
+  .score-ring {
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    @apply animate-skeleton rounded-xl bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100;
+    background-size: 200% 100%;
+  }
+
+  /* Premium scrollbar */
+  .scroll-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-300;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

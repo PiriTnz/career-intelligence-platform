@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_active_user, get_current_user
 from app.core.database import get_db
 from app.db.models import User
+from app.llm import get_provider
 from app.schemas.feedback import AffinityItem, PreferenceProfileRead
 from app.schemas.profile import (
     CVUploadResult,
@@ -18,7 +19,13 @@ from app.schemas.profile import (
     ProfileUpdate,
     ProfileVersionRead,
 )
-from app.services import preference_service, profile_service
+from app.schemas.profile_assistant import (
+    ApplyUpdatesRequest,
+    AssistantMessageRequest,
+    AssistantMessageResponse,
+    ProfileCompletenessResponse,
+)
+from app.services import preference_service, profile_assistant_service, profile_service
 from app.services.cv_parser import extract_text_from_pdf, parse_cv
 from app.services.profile_service import (
     create_profile,
@@ -179,6 +186,96 @@ async def get_profile_versions(
 ) -> list[ProfileVersionRead]:
     """Return all CV upload history for the current user, newest first."""
     return await list_profile_versions(db, current_user.id)
+
+
+@router.post("/assistant/message", response_model=AssistantMessageResponse)
+async def assistant_message(
+    data: AssistantMessageRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> AssistantMessageResponse:
+    """Send a free-form message to the profile assistant.
+
+    The assistant extracts career profile fields using LLM, validates them through
+    Pydantic, and returns proposed updates. Nothing is written to the profile here.
+    Use POST /assistant/apply-updates to confirm and persist the changes.
+    """
+    profile = await get_active_profile(db, current_user.id)
+    current_profile_dict = (
+        profile_assistant_service.profile_model_to_dict(profile) if profile else {}
+    )
+
+    provider = get_provider()
+    extracted = await profile_assistant_service.extract_profile_updates(
+        provider, data.message, current_profile_dict, data.language
+    )
+
+    # Merge extracted fields on top of current profile for completeness computation
+    merged = dict(current_profile_dict)
+    for k, v in extracted.items():
+        if isinstance(v, list) and isinstance(merged.get(k), list):
+            merged[k] = list(dict.fromkeys(merged[k] + v))
+        elif v is not None:
+            merged[k] = v
+
+    result = profile_assistant_service.compute_profile_completeness(merged)
+    assistant_msg = profile_assistant_service.build_assistant_message(
+        data.language, extracted, result.missing_fields, result.completeness
+    )
+    next_q = profile_assistant_service.get_next_question(result.missing_fields, data.language)
+
+    return AssistantMessageResponse(
+        assistant_message=assistant_msg,
+        updated_profile_fields=extracted,
+        missing_fields=result.missing_fields,
+        profile_completeness=result.completeness,
+        next_question=next_q,
+    )
+
+
+@router.get("/completeness", response_model=ProfileCompletenessResponse)
+async def get_completeness(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> ProfileCompletenessResponse:
+    """Return the completeness score of the current user's active profile."""
+    profile = await get_active_profile(db, current_user.id)
+    profile_dict = (
+        profile_assistant_service.profile_model_to_dict(profile) if profile else {}
+    )
+    result = profile_assistant_service.compute_profile_completeness(profile_dict)
+    return ProfileCompletenessResponse(
+        completeness=result.completeness,
+        missing_fields=result.missing_fields,
+        field_scores=result.field_scores,
+        total_possible=result.total_possible,
+    )
+
+
+@router.post("/assistant/apply-updates", response_model=ProfileRead)
+async def apply_updates(
+    data: ApplyUpdatesRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> ProfileRead:
+    """Persist profile updates previously proposed by POST /assistant/message.
+
+    The updates dict is re-validated through Pydantic before any write occurs.
+    List fields are merged with existing data; scalar fields are overwritten.
+    """
+    if not data.updates:
+        profile = await get_active_profile(db, current_user.id)
+        if profile is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active profile found and no updates provided",
+            )
+        return profile
+
+    updated = await profile_assistant_service.apply_profile_updates(
+        db, current_user.id, data.updates
+    )
+    return updated
 
 
 @router.get("/preferences", response_model=PreferenceProfileRead)

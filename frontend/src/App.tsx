@@ -9,6 +9,7 @@ import ProfileBuilder from '@/pages/ProfileBuilder'
 import CVVersions from '@/pages/CVVersions'
 import CoverLetters from '@/pages/CoverLetters'
 import Settings from '@/pages/Settings'
+import JobFinderModule from '@/modules/job-finder/JobFinderModule'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -74,6 +75,15 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Layout><Settings /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      {/* Liliyon Job Finder — embedded premium module */}
+      <Route
+        path="/job-finder"
+        element={
+          <ProtectedRoute>
+            <JobFinderModule />
           </ProtectedRoute>
         }
       />
