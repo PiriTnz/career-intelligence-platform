@@ -8,17 +8,16 @@ POST /scores/{job_id}/explain     — generate LLM explanation (score unchanged)
 POST /scores/{job_id}/gap-analysis — generate LLM skill-gap advice (score unchanged)
 POST /scores/batch-compute        — score every unscored job in one transaction
 """
-from __future__ import annotations
-
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
 from app.core.database import get_db
+from app.core.limiter import limiter
 from app.db.models import Job, Score, User
 from app.llm import get_provider
 from app.llm.explanations import explain_match, gap_analysis
@@ -220,7 +219,9 @@ async def batch_compute_scores(
 # ── LLM explanation (match-aware) ─────────────────────────────────────────────
 
 @router.post("/{job_id}/explain", response_model=ScoreRead)
+@limiter.limit("10/minute")
 async def generate_explanation(
+    request: Request,
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -290,7 +291,9 @@ async def generate_explanation(
 # ── LLM gap analysis ──────────────────────────────────────────────────────────
 
 @router.post("/{job_id}/gap-analysis", response_model=GapAnalysisRead)
+@limiter.limit("10/minute")
 async def generate_gap_analysis(
+    request: Request,
     job_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),

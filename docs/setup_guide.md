@@ -12,7 +12,7 @@
 ```bash
 # 1. Clone and enter the project
 git clone <repo>
-cd job-hunter-phase1
+cd career-intelligence-platform
 
 # 2. Create your .env file
 cp .env.example .env

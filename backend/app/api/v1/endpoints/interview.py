@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.limiter import limiter
 from app.db.models import User
 from app.llm import get_provider
 from app.schemas.interview import (
@@ -30,7 +29,9 @@ router = APIRouter()
 # ── Workspace endpoints ───────────────────────────────────────────────────────
 
 @router.post("/prepare/{job_id}", response_model=PrepareWorkspaceResponse)
+@limiter.limit("5/minute")
 async def prepare_workspace(
+    request: Request,
     job_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

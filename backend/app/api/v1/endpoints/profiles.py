@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_UPLOAD_DIR = os.environ.get("CV_UPLOAD_DIR", "/tmp/job_hunter_cvs")
+_UPLOAD_DIR = os.environ.get("CV_UPLOAD_DIR", "/tmp/career_intel_cvs")
 _MAX_CV_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
@@ -118,9 +119,9 @@ async def upload_cv(
     with open(cv_path, "wb") as fh:
         fh.write(raw_bytes)
 
-    # --- deterministic extraction (no LLM) ---
-    raw_text = extract_text_from_pdf(raw_bytes)
-    extraction = parse_cv(raw_text)
+    # --- deterministic extraction (no LLM) — run in thread to avoid blocking event loop ---
+    raw_text = await asyncio.to_thread(extract_text_from_pdf, raw_bytes)
+    extraction = await asyncio.to_thread(parse_cv, raw_text)
 
     logger.info(
         "CV uploaded for user %s — confidence=%d missing=%s",

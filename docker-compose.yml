@@ -27,6 +27,12 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     # GPU support — uncomment if you have NVIDIA GPU
     # deploy:
     #   resources:
@@ -44,8 +50,9 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jh}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/jobhunter
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-jh}:${POSTGRES_PASSWORD}@postgres:5432/jobhunter
       OLLAMA_URL: http://ollama:11434
+      CV_UPLOAD_DIR: /app/storage/cvs
     ports:
       - "8000:8000"
     depends_on:
@@ -53,7 +60,14 @@ services:
         condition: service_healthy
       ollama:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     volumes:
+      # DEV ONLY: remove this bind mount in production to use the built image
       - ./backend:/app
       - cv_storage:/app/storage/cvs
 

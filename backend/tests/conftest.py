@@ -40,6 +40,16 @@ def _patch_lifespan(request):
         yield
 
 
+@pytest.fixture(autouse=True)
+def _disable_rate_limiter():
+    """Disable rate limiting during tests — prevents 429s from rapid sequential requests."""
+    from app.core.limiter import limiter
+    original = limiter.enabled
+    limiter.enabled = False
+    yield
+    limiter.enabled = original
+
+
 # ── Mock DB session ───────────────────────────────────────────────────────────
 
 class _MockResult:

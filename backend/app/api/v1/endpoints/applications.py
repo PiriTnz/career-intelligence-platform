@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.limiter import limiter
 from app.db.models import Application, User
 from app.llm import get_provider
 from app.schemas.application import ApplicationCreate, ApplicationRead, ApplicationStatusUpdate
@@ -123,7 +122,9 @@ def _build_analysis_response(data: dict) -> RequirementAnalysis:
 
 
 @router.post("/{job_id}/prepare", response_model=PreparePackageResponse)
+@limiter.limit("5/minute")
 async def prepare_application_package(
+    request: Request,
     job_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

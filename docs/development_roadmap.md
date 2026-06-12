@@ -29,7 +29,7 @@ Full directory layout, configuration files, stubs for all modules.
 ## Phase 5 — LLM abstraction ✅
 - BaseLLMProvider ABC
 - OllamaProvider (calls local llama3)
-- OpenAIProvider placeholder
+- OpenAIProvider (fallback when OPENAI_API_KEY is set)
 - Score explanation generation only (never affects scores)
 
 ## Phase 6 — Agents ✅
@@ -42,7 +42,7 @@ Full directory layout, configuration files, stubs for all modules.
 - Agent 6: Opportunity Discovery Agent
 
 ## Phase 7 — React frontend ✅
-All 8 pages (Dashboard, Jobs, Profile, Applications, CV, Cover Letters, Agent Logs, Settings)
+All pages (Dashboard, Jobs, Profile, Applications, CV, Cover Letters, Agent Logs, Settings)
 implemented with React Query v5, AuthContext, ProtectedRoute.
 
 ## Phase 8 — n8n workflows ✅
@@ -52,13 +52,30 @@ implemented with React Query v5, AuthContext, ProtectedRoute.
 - `notification_flow.json` — hourly high-score alerts
 - `human_approval.json` — webhook-driven CV/CL generation with wait node
 
-## Phase 9 — Testing & documentation ✅
-- 116 automated tests across 5 test files (0 failures)
-- Security: password hashing + JWT (12 tests)
-- Scoring engine: all 7 dimensions + integration (35 tests)
-- Normalizer: contract/salary/skills/language/pipeline (35 tests)
-- API auth: register/login/protected routes (12 tests)
-- API agents: dispatch, auth guards, log filtering (7 tests)
-- No PostgreSQL required — DB mocked via AsyncMock
-- Run locally: `cd backend && .venv/bin/python -m pytest`
-- Run in Docker: `docker compose exec backend python -m pytest`
+## Phase 9 — Evidence-based application toolkit ✅
+- Application Package Agent: 3-tier skill classification, ATS CV draft, cover letter
+- Interview Optimization Workspace: 4-category evidence KB, readiness score, recruiter concerns
+- Career Interview Agent: evidence questions, pending/confirm/reject flow
+- 797 automated tests across 24 test files (0 failures)
+- No PostgreSQL required for tests — DB mocked via AsyncMock
+
+## Phase A — Production readiness (private beta) ✅
+- Startup security gate: refuses to start with insecure defaults in production
+- CORS origins read from CORS_ORIGINS env var
+- Rate limiting on all LLM-backed endpoints
+- Async PDF extraction (no longer blocks event loop)
+- Removed `--reload` from production Dockerfile
+- Alembic upgrade head runs via entrypoint before uvicorn
+- `.dockerignore` prevents secrets/cache from image build
+- .env.example sanitized (no real credentials)
+- alembic.ini no longer contains credentials
+- GitHub Actions CI (backend tests + frontend build)
+- Inactive user raises 403 Forbidden (was 400)
+
+## Phase B — MVP completion (next)
+See [audit report](../AUDIT.md) for prioritized roadmap.
+- Password reset flow
+- Refresh tokens
+- Background task queue for LLM calls
+- Consolidated skill classification module
+- Pagination on all list endpoints

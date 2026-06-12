@@ -1,9 +1,34 @@
+# Secrets — never copy into image
+.env
+*.env.local
+.env.*
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
-.env
-.venv
-venv/
-*.egg-info/
+*.pyd
 .pytest_cache/
-alembic/versions/*.py
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Development artifacts
+*.egg-info/
+dist/
+build/
+
+# Storage (CV files — use named Docker volume instead)
+storage/
+
+# Tests (not needed in production image)
+tests/
+
+# IDE
+.vscode/
+.idea/
+*.swp
