@@ -10,6 +10,9 @@ from .cv_version import CVVersion
 from .cover_letter import CoverLetter
 from .feedback_event import FeedbackEvent
 from .agent_log import AgentLog
+from .opportunity import Opportunity
+from .opportunity_preference import OpportunityPreference
+from .opportunity_feedback import OpportunityFeedback
 
 __all__ = [
     "Base",
@@ -24,4 +27,7 @@ __all__ = [
     "CoverLetter",
     "FeedbackEvent",
     "AgentLog",
+    "Opportunity",
+    "OpportunityPreference",
+    "OpportunityFeedback",
 ]

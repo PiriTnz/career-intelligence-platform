@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     cv_versions,
     health,
     jobs,
+    opportunities,
     profiles,
     scores,
     sources,
@@ -30,3 +31,6 @@ router.include_router(cv_versions.router, prefix="/cv-versions", tags=["cv-versi
 router.include_router(cover_letters.router, prefix="/cover-letters", tags=["cover-letters"])
 router.include_router(agents.router, prefix="/agents", tags=["agents"])
 router.include_router(sources.router, prefix="/sources", tags=["sources"])
+
+# Opportunity Discovery Agent — prefix carried in router definition
+router.include_router(opportunities.router)
