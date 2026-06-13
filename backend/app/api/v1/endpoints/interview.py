@@ -191,4 +191,5 @@ def _ws_to_response(ws, job_id: uuid.UUID) -> PrepareWorkspaceResponse:
         cover_letter_draft=ws.cover_letter_draft,
         readiness=readiness,
         warnings=ws.warnings or [],
+        prepared_at=ws.updated_at,
     )

@@ -106,6 +106,7 @@ class PrepareWorkspaceResponse(BaseModel):
     cover_letter_draft: str
     readiness: InterviewReadiness
     warnings: list[str]
+    prepared_at: datetime | None = None
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────

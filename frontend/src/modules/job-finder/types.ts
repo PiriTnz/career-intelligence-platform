@@ -144,6 +144,7 @@ export interface WorkspaceResponse {
   cover_letter_draft: string
   readiness: InterviewReadiness
   warnings: string[]
+  prepared_at?: string | null
 }
 
 export interface PipelineItem {
