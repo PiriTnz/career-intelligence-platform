@@ -4,12 +4,13 @@ import {
   CheckCircle2, ArrowRightLeft, BookOpen, AlertTriangle,
   FileText, Mail, Sparkles, Loader2, RefreshCw,
   ShieldCheck, AlertCircle, ChevronDown, Star,
-  Brain, Zap,
+  Brain, Zap, Download,
 } from 'lucide-react'
 import type { JobRecommendation } from '../../types'
-import { useWorkspace, usePrepareWorkspace } from '../../hooks'
+import { useWorkspace, usePrepareWorkspace, useApplicationByJob } from '../../hooks'
 import EnrichmentPanel from './EnrichmentPanel'
 import ApplicationStatusCard from './ApplicationStatusCard'
+import ExportPanel from './ExportPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,7 @@ function Divider() {
 
 export default function WorkspaceTab({ job }: Props) {
   const { data: workspace, isLoading } = useWorkspace(job.job_id)
+  const { data: appData } = useApplicationByJob(job.job_id)
   const prepare = usePrepareWorkspace()
   const [activeKey, setActiveKey] = useState('readiness')
 
@@ -244,6 +246,7 @@ export default function WorkspaceTab({ job }: Props) {
     { key: 'status', label: 'Track' },
     ...(workspace.cv_draft ? [{ key: 'cv', label: 'CV' }] : []),
     ...(workspace.cover_letter_draft ? [{ key: 'letter', label: 'Letter' }] : []),
+    ...(workspace.cv_draft || workspace.cover_letter_draft ? [{ key: 'export', label: 'Export' }] : []),
     { key: 'apply', label: 'Apply' },
   ]
 
@@ -720,6 +723,36 @@ export default function WorkspaceTab({ job }: Props) {
                 </div>
               </div>
             </Reveal>
+          </section>
+        </>
+      )}
+
+      {/* ── Section 7b: Export & Outreach ─────────────────────────────────────── */}
+      {(workspace.cv_draft || workspace.cover_letter_draft) && (
+        <>
+          <Divider />
+          <section
+            ref={makeRef('export')}
+            className="px-6 py-8 bg-white"
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <Download size={13} className="text-slate-500" />
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                Export & Outreach
+              </span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight mb-1">
+              Download and send
+            </h2>
+            <p className="text-sm text-slate-400 mb-5 leading-relaxed">
+              Download your documents or copy outreach messages ready to paste.
+            </p>
+            <ExportPanel
+              jobId={job.job_id}
+              hasCv={!!workspace.cv_draft}
+              hasCoverLetter={!!workspace.cover_letter_draft}
+              currentStatus={appData?.status ?? null}
+            />
           </section>
         </>
       )}

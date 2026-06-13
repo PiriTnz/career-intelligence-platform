@@ -164,6 +164,18 @@ export function useCreateApplication() {
   })
 }
 
+// ── Export ────────────────────────────────────────────────────────────────────
+
+export function useExportMessages(jobId: string | null) {
+  return useQuery({
+    queryKey: ['job-finder', 'export-messages', jobId],
+    queryFn: () => api.getExportMessages(jobId!),
+    enabled: !!jobId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
 // ── Evidence Discovery / Enrichment ───────────────────────────────────────────
 
 export function useEnrichmentStatus(jobId: string | null) {

@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     cover_letters,
     cv_versions,
     enrichment,
+    export,
     health,
     interview,
     jobs,
@@ -42,3 +43,6 @@ router.include_router(interview.router, prefix="/interview", tags=["interview"])
 
 # Job-Aware Profile Enrichment Agent
 router.include_router(enrichment.router, prefix="/enrichment", tags=["enrichment"])
+
+# Application Package Export (DOCX / PDF / copy-ready messages)
+router.include_router(export.router, prefix="/export", tags=["export"])

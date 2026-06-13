@@ -29,6 +29,8 @@ class ApplicationPackageRead(BaseModel):
     requirement_analysis: dict
     warnings: list[str]
     ready_to_apply_score: int
+    exported_cv_at: datetime | None = None
+    exported_cover_letter_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -40,3 +42,5 @@ class PreparePackageResponse(BaseModel):
     requirement_analysis: RequirementAnalysis
     warnings: list[str]
     ready_to_apply_score: int
+    exported_cv_at: datetime | None = None
+    exported_cover_letter_at: datetime | None = None

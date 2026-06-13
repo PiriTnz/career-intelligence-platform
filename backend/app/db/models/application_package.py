@@ -30,6 +30,10 @@ class ApplicationPackage(Base):
     warnings: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     ready_to_apply_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+    # Set once on first download of each document
+    exported_cv_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    exported_cover_letter_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

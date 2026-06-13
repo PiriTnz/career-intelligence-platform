@@ -141,6 +141,44 @@ export const createApplication = async (jobId: string): Promise<Application> => 
   return data
 }
 
+// ── Export (DOCX / PDF / copy-ready messages) ────────────────────────────────
+
+export interface ExportMessages {
+  hr_email: string
+  linkedin_message: string
+}
+
+/**
+ * Trigger a file download by fetching with the auth header and creating a
+ * temporary anchor element. Reads the JWT from localStorage (same source as
+ * the Axios interceptor in client.ts).
+ */
+export const downloadExport = async (
+  jobId: string,
+  filename: 'cv.docx' | 'cv.pdf' | 'letter.docx' | 'letter.pdf',
+): Promise<void> => {
+  const token = localStorage.getItem('access_token') ?? ''
+  const base = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+  const resp = await fetch(`${base}/api/v1/export/${jobId}/${filename}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!resp.ok) throw new Error(`Export failed: ${resp.status}`)
+  const blob = await resp.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+export const getExportMessages = async (jobId: string): Promise<ExportMessages> => {
+  const { data } = await client.get<ExportMessages>(`/api/v1/export/${jobId}/messages`)
+  return data
+}
+
 // ── Evidence Discovery / Enrichment ───────────────────────────────────────────
 
 export const getEnrichmentStatus = async (jobId: string): Promise<EnrichmentStatus> => {
