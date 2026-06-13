@@ -80,13 +80,65 @@ export function useTrackerApplications() {
   })
 }
 
+export function useReadyToApply() {
+  return useQuery({
+    queryKey: ['job-finder', 'ready'],
+    queryFn: api.getReadyToApply,
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+export function useApplicationMetrics() {
+  return useQuery({
+    queryKey: ['job-finder', 'metrics'],
+    queryFn: api.getApplicationMetrics,
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+export function useApplicationByJob(jobId: string | null) {
+  return useQuery({
+    queryKey: ['job-finder', 'application-by-job', jobId],
+    queryFn: () => api.getApplicationByJob(jobId!),
+    enabled: !!jobId,
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+export function useUpdateStatusByJob() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.updateStatusByJob,
+    onSuccess: (data) => {
+      qc.setQueryData(['job-finder', 'application-by-job', data.job_id], data)
+      qc.invalidateQueries({ queryKey: ['job-finder', 'tracker'] })
+      qc.invalidateQueries({ queryKey: ['job-finder', 'ready'] })
+      qc.invalidateQueries({ queryKey: ['job-finder', 'metrics'] })
+    },
+  })
+}
+
+export function useUpdateNotesByJob() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.updateNotesByJob,
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'application-by-job', vars.jobId] })
+      qc.invalidateQueries({ queryKey: ['job-finder', 'tracker'] })
+    },
+  })
+}
+
 export function useUpdateApplicationStatus() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: api.updateApplicationStatus,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['job-finder', 'tracker'] })
-      qc.invalidateQueries({ queryKey: ['job-finder', 'applications'] })
+      qc.invalidateQueries({ queryKey: ['job-finder', 'metrics'] })
     },
   })
 }
@@ -107,7 +159,7 @@ export function useCreateApplication() {
     mutationFn: (jobId: string) => api.createApplication(jobId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['job-finder', 'tracker'] })
-      qc.invalidateQueries({ queryKey: ['job-finder', 'applications'] })
+      qc.invalidateQueries({ queryKey: ['job-finder', 'metrics'] })
     },
   })
 }

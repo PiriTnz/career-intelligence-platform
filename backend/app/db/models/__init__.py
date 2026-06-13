@@ -5,6 +5,7 @@ from .profile_version import ProfileVersion
 from .company import Company
 from .job import Job
 from .application import Application
+from .application_timeline import ApplicationTimeline
 from .score import Score
 from .cv_version import CVVersion
 from .cover_letter import CoverLetter
@@ -27,6 +28,7 @@ __all__ = [
     "Company",
     "Job",
     "Application",
+    "ApplicationTimeline",
     "Score",
     "CVVersion",
     "CoverLetter",

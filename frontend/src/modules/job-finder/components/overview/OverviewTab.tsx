@@ -3,7 +3,7 @@ import {
   Briefcase, Star, Bookmark, Send, Trophy,
   TrendingUp, Zap, ArrowRight, RefreshCw
 } from 'lucide-react'
-import { useRecommendations, useApplications, useProfileCompleteness } from '../../hooks'
+import { useRecommendations, useApplications, useProfileCompleteness, useApplicationMetrics } from '../../hooks'
 import { getRemoteLabel } from '../../utils'
 import StatCard from './StatCard'
 import ScoreDistChart from './ScoreDistChart'
@@ -22,11 +22,11 @@ export default function OverviewTab({ onNavigateToJobs, onSelectJob }: Props) {
   const { data: jobs = [], isLoading, error, refetch } = useRecommendations({ limit: 50 })
   const { data: applications = [] } = useApplications()
   const { data: completeness } = useProfileCompleteness()
+  const { data: metrics } = useApplicationMetrics()
 
   const highScoreJobs = jobs.filter(j => j.final_score >= 85)
-  const savedApplications = applications.filter(a => a.status === 'shortlisted' || a.status === 'found')
+  // Legacy: used for non-tracker applications count display
   const appliedApplications = applications.filter(a => a.status === 'applied')
-  const interviewApplications = applications.filter(a => a.status === 'interview')
 
   const recentJobs = jobs.slice(0, 5)
 
@@ -105,27 +105,27 @@ export default function OverviewTab({ onNavigateToJobs, onSelectJob }: Props) {
         />
         <StatCard
           index={2}
-          title="Saved"
-          value={savedApplications.length}
-          subtitle="applications"
+          title="Ready to Apply"
+          value={metrics?.ready_to_apply ?? 0}
+          subtitle="in queue"
           icon={Bookmark}
-          iconColor="text-blue-500"
-          iconBg="bg-blue-50"
+          iconColor="text-emerald-500"
+          iconBg="bg-emerald-50"
         />
         <StatCard
           index={3}
           title="Applied"
-          value={appliedApplications.length}
+          value={metrics?.applied ?? appliedApplications.length}
           subtitle="submitted"
           icon={Send}
-          iconColor="text-violet-500"
-          iconBg="bg-violet-50"
+          iconColor="text-blue-500"
+          iconBg="bg-blue-50"
         />
         <StatCard
           index={4}
           title="Interviews"
-          value={interviewApplications.length}
-          subtitle="scheduled"
+          value={metrics ? metrics.interview + metrics.offer : 0}
+          subtitle={metrics?.offer ? `${metrics.offer} offer${metrics.offer > 1 ? 's' : ''}` : 'scheduled'}
           icon={Trophy}
           iconColor="text-emerald-500"
           iconBg="bg-emerald-50"

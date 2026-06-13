@@ -3,10 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Briefcase, MapPin, Wifi, ChevronRight,
   CheckCircle2, Clock, Trophy,
-  X, Archive, FileText, Loader2, NotebookPen,
-  Send, Phone, Star,
+  X, FileText, Loader2, NotebookPen,
+  Send, Phone, Star, AlertTriangle,
 } from 'lucide-react'
-import { useTrackerApplications, useUpdateApplicationStatus, useUpdateApplicationNotes } from '../../hooks'
+import {
+  useTrackerApplications,
+  useUpdateApplicationStatus,
+  useUpdateApplicationNotes,
+  useReadyToApply,
+  useApplicationMetrics,
+} from '../../hooks'
 import type { ApplicationTrackerItem, ApplicationStatus } from '../../types'
 
 // ─── Pipeline stage config ────────────────────────────────────────────────────
@@ -24,82 +30,98 @@ interface Stage {
 
 const STAGES: Stage[] = [
   {
-    id: 'saved',
-    label: 'Saved',
-    statuses: ['found', 'shortlisted'],
+    id: 'recommended',
+    label: 'Recommended',
+    statuses: ['recommended'],
     color: 'text-slate-600',
     ring:  'border-slate-200 bg-slate-50',
     dot:   'bg-slate-400',
     icon:  Star,
-    description: 'Jobs you\'ve discovered and bookmarked.',
+    description: 'Jobs matched to your profile — not yet in preparation.',
+  },
+  {
+    id: 'preparing',
+    label: 'Preparing',
+    statuses: ['preparing'],
+    color: 'text-amber-600',
+    ring:  'border-amber-200 bg-amber-50',
+    dot:   'bg-amber-500',
+    icon:  FileText,
+    description: 'Building CV and cover letter for this role.',
   },
   {
     id: 'ready',
     label: 'Ready to Apply',
-    statuses: ['cv_generated', 'approved'],
-    color: 'text-brand-600',
-    ring:  'border-brand-200 bg-brand-50',
-    dot:   'bg-brand-500',
-    icon:  FileText,
-    description: 'CV and cover letter generated. Ready to send.',
+    statuses: ['ready_to_apply'],
+    color: 'text-emerald-600',
+    ring:  'border-emerald-200 bg-emerald-50',
+    dot:   'bg-emerald-500',
+    icon:  CheckCircle2,
+    description: 'Application package complete — submit when ready.',
   },
   {
     id: 'applied',
     label: 'Applied',
     statuses: ['applied'],
+    color: 'text-blue-600',
+    ring:  'border-blue-200 bg-blue-50',
+    dot:   'bg-blue-500',
+    icon:  Send,
+    description: 'Application submitted — awaiting response.',
+  },
+  {
+    id: 'follow_up',
+    label: 'Follow-up',
+    statuses: ['follow_up'],
+    color: 'text-orange-600',
+    ring:  'border-orange-200 bg-orange-50',
+    dot:   'bg-orange-500',
+    icon:  Clock,
+    description: 'Follow-up sent — watching for a reply.',
+  },
+  {
+    id: 'interview',
+    label: 'Interviewing',
+    statuses: ['interview'],
     color: 'text-violet-600',
     ring:  'border-violet-200 bg-violet-50',
     dot:   'bg-violet-500',
-    icon:  Send,
-    description: 'Application submitted — waiting for response.',
-  },
-  {
-    id: 'progress',
-    label: 'In Progress',
-    statuses: ['viewed', 'replied', 'interview'],
-    color: 'text-amber-600',
-    ring:  'border-amber-200 bg-amber-50',
-    dot:   'bg-amber-500',
     icon:  Phone,
-    description: 'Active conversations and scheduled interviews.',
+    description: 'Active interview process underway.',
   },
   {
     id: 'closed',
     label: 'Closed',
-    statuses: ['rejected', 'archived'],
-    color: 'text-rose-500',
-    ring:  'border-rose-200 bg-rose-50',
-    dot:   'bg-rose-400',
-    icon:  Archive,
-    description: 'Completed or withdrawn applications.',
+    statuses: ['offer', 'rejected'],
+    color: 'text-slate-400',
+    ring:  'border-slate-200 bg-slate-50',
+    dot:   'bg-slate-300',
+    icon:  Trophy,
+    description: 'Completed applications — offers and rejections.',
   },
 ]
 
-// Next logical status for quick-advance
 const NEXT_STATUS: Partial<Record<ApplicationStatus, ApplicationStatus>> = {
-  found:       'shortlisted',
-  shortlisted: 'cv_generated',
-  cv_generated:'approved',
-  approved:    'applied',
-  applied:     'viewed',
-  viewed:      'replied',
-  replied:     'interview',
+  recommended:   'preparing',
+  preparing:     'ready_to_apply',
+  ready_to_apply:'applied',
+  applied:       'follow_up',
+  follow_up:     'interview',
+  interview:     'offer',
 }
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  found:       'Found',
-  shortlisted: 'Shortlisted',
-  cv_generated:'CV Generated',
-  approved:    'Approved',
-  applied:     'Applied',
-  viewed:      'Viewed',
-  replied:     'Replied',
-  interview:   'Interview',
-  rejected:    'Rejected',
-  archived:    'Archived',
+  recommended:   'Recommended',
+  preparing:     'Preparing',
+  ready_to_apply:'Ready to Apply',
+  applied:       'Applied',
+  follow_up:     'Follow-up',
+  interview:     'Interview',
+  offer:         'Offer',
+  rejected:      'Rejected',
 }
 
-// ─── Readiness score badge ─────────────────────────────────────────────────────
+// ─── Readiness badge ──────────────────────────────────────────────────────────
 
 function ReadinessBadge({ score, label }: { score: number; label: string }) {
   const colors: Record<string, string> = {
@@ -109,13 +131,11 @@ function ReadinessBadge({ score, label }: { score: number; label: string }) {
     weak:      'bg-rose-100 text-rose-600 border-rose-200',
   }
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${colors[label] ?? colors.weak}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${colors[label] ?? colors.weak}`}>
       {score}%
     </span>
   )
 }
-
-// ─── Days label ───────────────────────────────────────────────────────────────
 
 function daysAgo(dateStr: string): string {
   const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000)
@@ -131,18 +151,17 @@ interface CardProps {
   stageColor: string
   onAdvance: (id: string, next: ApplicationStatus) => void
   onReject:  (id: string) => void
-  onArchive: (id: string) => void
   isUpdating: boolean
 }
 
-function ApplicationCard({ item, stageColor, onAdvance, onReject, onArchive, isUpdating }: CardProps) {
+function ApplicationCard({ item, onAdvance, onReject, isUpdating }: CardProps) {
   const [notesOpen, setNotesOpen] = useState(false)
   const [notesDraft, setNotesDraft] = useState(item.notes ?? '')
   const [notesSaving, setNotesSaving] = useState(false)
   const updateNotes = useUpdateApplicationNotes()
 
   const nextStatus = NEXT_STATUS[item.status]
-  const isClosed = item.status === 'rejected' || item.status === 'archived'
+  const isClosed = item.status === 'offer' || item.status === 'rejected'
 
   const handleSaveNotes = useCallback(async () => {
     if (notesDraft === item.notes) { setNotesOpen(false); return }
@@ -164,19 +183,13 @@ function ApplicationCard({ item, stageColor, onAdvance, onReject, onArchive, isU
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className={`group relative rounded-2xl border bg-white transition-shadow hover:shadow-sm ${isClosed ? 'opacity-60' : ''}`}
+      className={`rounded-2xl border bg-white transition-shadow hover:shadow-sm ${isClosed ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start gap-3.5 p-4">
-        {/* Company avatar */}
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-black text-white ${stageColor.replace('text-', 'bg-').replace('-600', '-500').replace('-500', '-400')}`}
-          style={{ background: 'linear-gradient(135deg, var(--tw-gradient-stops))', backgroundColor: undefined }}
-        >
-          <div className="w-9 h-9 rounded-xl bg-slate-700 flex items-center justify-center text-white text-sm font-black flex-shrink-0">
-            {companyInitial}
-          </div>
+        <div className="w-9 h-9 rounded-xl bg-slate-700 flex items-center justify-center text-white text-sm font-black flex-shrink-0">
+          {companyInitial}
         </div>
 
-        {/* Main info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -188,30 +201,28 @@ function ApplicationCard({ item, stageColor, onAdvance, onReject, onArchive, isU
             )}
           </div>
 
-          {/* Meta row */}
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {item.location && (
               <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                <MapPin size={9} />
-                {item.location}
+                <MapPin size={9} />{item.location}
               </span>
             )}
             {item.remote !== 'none' && (
               <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                <Wifi size={9} />
-                {item.remote}
+                <Wifi size={9} />{item.remote}
               </span>
             )}
             <span className="flex items-center gap-1 text-[10px] text-slate-400">
               <Clock size={9} />
               {daysAgo(item.applied_at ?? item.created_at)}
             </span>
-            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-500`}>
-              {STATUS_LABELS[item.status]}
-            </span>
+            {item.follow_up_due && (
+              <span className="flex items-center gap-1 text-[10px] text-orange-500 font-semibold">
+                <AlertTriangle size={9} />Follow-up due
+              </span>
+            )}
           </div>
 
-          {/* Notes preview */}
           {item.notes && !notesOpen && (
             <p className="text-xs text-slate-400 mt-1.5 line-clamp-1 italic">"{item.notes}"</p>
           )}
@@ -232,7 +243,7 @@ function ApplicationCard({ item, stageColor, onAdvance, onReject, onArchive, isU
               <textarea
                 value={notesDraft}
                 onChange={e => setNotesDraft(e.target.value)}
-                placeholder="Add notes about this application…"
+                placeholder="Add notes…"
                 rows={2}
                 className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-brand-300"
               />
@@ -278,27 +289,57 @@ function ApplicationCard({ item, stageColor, onAdvance, onReject, onArchive, isU
         </button>
 
         {!isClosed && (
-          <>
-            <button
-              onClick={() => onReject(item.id)}
-              disabled={isUpdating}
-              title="Mark rejected"
-              className="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
-            >
-              <X size={10} />
-            </button>
-            <button
-              onClick={() => onArchive(item.id)}
-              disabled={isUpdating}
-              title="Archive"
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 hover:text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
-            >
-              <Archive size={10} />
-            </button>
-          </>
+          <button
+            onClick={() => onReject(item.id)}
+            disabled={isUpdating}
+            title="Mark rejected"
+            className="ml-auto flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+          >
+            <X size={10} />
+          </button>
         )}
       </div>
     </motion.div>
+  )
+}
+
+// ─── Ready-to-Apply queue ─────────────────────────────────────────────────────
+
+function ReadyQueue() {
+  const { data: ready = [], isLoading } = useReadyToApply()
+
+  if (isLoading || ready.length === 0) return null
+
+  return (
+    <div className="px-6 pb-5">
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-emerald-100">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs font-black uppercase tracking-widest text-emerald-700">
+            Ready to Apply
+          </span>
+          <span className="ml-1 text-xs font-bold text-emerald-600 bg-emerald-100 rounded-full px-2 py-0.5">
+            {ready.length}
+          </span>
+        </div>
+        <div className="divide-y divide-emerald-100">
+          {ready.map(item => (
+            <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="w-7 h-7 rounded-lg bg-emerald-700 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+                {item.company_name.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate">{item.job_title}</p>
+                <p className="text-[10px] text-slate-500 truncate">{item.company_name}</p>
+              </div>
+              {item.readiness_score !== null && (
+                <span className="text-xs font-bold text-emerald-700">{item.readiness_score}%</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -306,6 +347,7 @@ function ApplicationCard({ item, stageColor, onAdvance, onReject, onArchive, isU
 
 export default function TrackerTab() {
   const { data: items = [], isLoading, error, refetch } = useTrackerApplications()
+  const { data: metrics } = useApplicationMetrics()
   const updateStatus = useUpdateApplicationStatus()
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
@@ -318,16 +360,7 @@ export default function TrackerTab() {
     }
   }, [updateStatus])
 
-  const handleReject  = useCallback((id: string) => handleStatusChange(id, 'rejected'), [handleStatusChange])
-  const handleArchive = useCallback((id: string) => handleStatusChange(id, 'archived'), [handleStatusChange])
-
-  // Summary stats
-  const stats = {
-    total:       items.length,
-    ready:       items.filter(i => i.status === 'cv_generated' || i.status === 'approved').length,
-    applied:     items.filter(i => ['applied', 'viewed', 'replied'].includes(i.status)).length,
-    interview:   items.filter(i => i.status === 'interview').length,
-  }
+  const handleReject = useCallback((id: string) => handleStatusChange(id, 'rejected'), [handleStatusChange])
 
   if (isLoading) {
     return (
@@ -362,17 +395,17 @@ export default function TrackerTab() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="px-6 pt-6 pb-4 flex-shrink-0">
         <h2 className="text-lg font-bold text-slate-900 tracking-tight mb-1">Application Pipeline</h2>
-        <p className="text-sm text-slate-400">Track every application from discovery to offer.</p>
+        <p className="text-sm text-slate-400">Every status change is manual and timestamped.</p>
       </div>
 
       {/* ── Stats bar ──────────────────────────────────────────────────────── */}
       <div className="px-6 pb-5 flex-shrink-0">
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: 'Total',     value: stats.total,     icon: Briefcase,    color: 'text-slate-600',  bg: 'bg-slate-50 border-slate-200' },
-            { label: 'Ready',     value: stats.ready,     icon: FileText,     color: 'text-brand-600',  bg: 'bg-brand-50 border-brand-200' },
-            { label: 'Applied',   value: stats.applied,   icon: Send,         color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
-            { label: 'Interview', value: stats.interview, icon: Trophy,       color: 'text-amber-600',  bg: 'bg-amber-50 border-amber-200' },
+            { label: 'Total',      value: metrics?.total ?? items.length,          icon: Briefcase,     color: 'text-slate-600',   bg: 'bg-slate-50 border-slate-200' },
+            { label: 'Ready',      value: metrics?.ready_to_apply ?? 0,            icon: CheckCircle2,  color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
+            { label: 'Applied',    value: metrics?.applied ?? 0,                   icon: Send,          color: 'text-blue-600',    bg: 'bg-blue-50 border-blue-200' },
+            { label: 'Interviews', value: (metrics?.interview ?? 0) + (metrics?.offer ?? 0), icon: Trophy, color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200' },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <motion.div
               key={label}
@@ -388,6 +421,9 @@ export default function TrackerTab() {
         </div>
       </div>
 
+      {/* ── Ready-to-apply queue ────────────────────────────────────────────── */}
+      <ReadyQueue />
+
       {/* ── Empty state ────────────────────────────────────────────────────── */}
       {items.length === 0 && (
         <div className="flex-1 flex items-center justify-center px-6 pb-6">
@@ -397,21 +433,20 @@ export default function TrackerTab() {
             </div>
             <h3 className="text-sm font-bold text-slate-700 mb-1">No applications yet</h3>
             <p className="text-xs text-slate-400 max-w-[220px] leading-relaxed">
-              Open a job in the Jobs tab and click "Add to Tracker" to start tracking.
+              Open a job from the Jobs tab and add it to your pipeline.
             </p>
           </div>
         </div>
       )}
 
-      {/* ── Pipeline sections ───────────────────────────────────────────────── */}
+      {/* ── Pipeline stages ─────────────────────────────────────────────────── */}
       <div className="px-6 pb-8 space-y-8 flex-1">
         {STAGES.map(stage => {
-          const stageItems = items.filter(i => stage.statuses.includes(i.status))
+          const stageItems = items.filter(i => (stage.statuses as string[]).includes(i.status))
           const StageIcon = stage.icon
 
           return (
             <div key={stage.id}>
-              {/* Stage header */}
               <div className="flex items-center gap-2.5 mb-3">
                 <div className={`w-1.5 h-1.5 rounded-full ${stage.dot}`} />
                 <span className={`text-xs font-black uppercase tracking-widest ${stage.color}`}>
@@ -422,7 +457,6 @@ export default function TrackerTab() {
                 </span>
               </div>
 
-              {/* Cards */}
               {stageItems.length === 0 ? (
                 <div className={`rounded-2xl border border-dashed p-4 text-center ${stage.ring}`}>
                   <StageIcon size={14} className={`${stage.color} mx-auto mb-1 opacity-40`} />
@@ -438,7 +472,6 @@ export default function TrackerTab() {
                         stageColor={stage.color}
                         onAdvance={handleStatusChange}
                         onReject={handleReject}
-                        onArchive={handleArchive}
                         isUpdating={updatingId === item.id}
                       />
                     ))}

@@ -162,9 +162,17 @@ export interface PipelineItem {
 // ── Application Tracker ───────────────────────────────────────────────────────
 
 export type ApplicationStatus =
-  | 'found' | 'shortlisted' | 'cv_generated' | 'approved'
-  | 'applied' | 'viewed' | 'replied' | 'interview'
-  | 'rejected' | 'archived'
+  | 'recommended' | 'preparing' | 'ready_to_apply'
+  | 'applied' | 'follow_up' | 'interview'
+  | 'offer' | 'rejected'
+
+export interface ApplicationTimelineItem {
+  id: string
+  application_id: string
+  status: string
+  notes: string | null
+  created_at: string
+}
 
 export interface ApplicationTrackerItem {
   id: string
@@ -177,13 +185,42 @@ export interface ApplicationTrackerItem {
   readiness_score: number | null
   readiness_label: 'excellent' | 'strong' | 'moderate' | 'weak' | null
   has_workspace: boolean
+  follow_up_due: boolean
   applied_at: string | null
-  approved_at: string | null
-  replied_at: string | null
+  follow_up_at: string | null
   interview_at: string | null
+  offer_at: string | null
+  rejected_at: string | null
   notes: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ApplicationWithTimeline {
+  id: string
+  job_id: string
+  status: ApplicationStatus
+  notes: string | null
+  applied_at: string | null
+  follow_up_at: string | null
+  interview_at: string | null
+  offer_at: string | null
+  rejected_at: string | null
+  created_at: string
+  updated_at: string
+  timeline: ApplicationTimelineItem[]
+}
+
+export interface ApplicationMetrics {
+  total: number
+  recommended: number
+  preparing: number
+  ready_to_apply: number
+  applied: number
+  follow_up: number
+  interview: number
+  offer: number
+  rejected: number
 }
 
 // ── Evidence Discovery / Enrichment ───────────────────────────────────────────

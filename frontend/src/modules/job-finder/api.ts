@@ -8,6 +8,8 @@ import type {
   WorkspaceResponse,
   PipelineItem,
   ApplicationTrackerItem,
+  ApplicationWithTimeline,
+  ApplicationMetrics,
   ApplicationStatus,
   EnrichmentStatus,
   StartEnrichmentResponse,
@@ -70,6 +72,44 @@ export const getApplicationPipeline = async (): Promise<PipelineItem[]> => {
 
 export const getTrackerApplications = async (): Promise<ApplicationTrackerItem[]> => {
   const { data } = await client.get<ApplicationTrackerItem[]>('/api/v1/applications/tracker')
+  return data
+}
+
+export const getReadyToApply = async (): Promise<ApplicationTrackerItem[]> => {
+  const { data } = await client.get<ApplicationTrackerItem[]>('/api/v1/applications/ready')
+  return data
+}
+
+export const getApplicationMetrics = async (): Promise<ApplicationMetrics> => {
+  const { data } = await client.get<ApplicationMetrics>('/api/v1/applications/metrics')
+  return data
+}
+
+export const getApplicationByJob = async (jobId: string): Promise<ApplicationWithTimeline> => {
+  const { data } = await client.get<ApplicationWithTimeline>(`/api/v1/applications/job/${jobId}`)
+  return data
+}
+
+export const updateStatusByJob = async (params: {
+  jobId: string
+  status: ApplicationStatus
+  notes?: string
+}): Promise<ApplicationWithTimeline> => {
+  const { data } = await client.post<ApplicationWithTimeline>(
+    `/api/v1/applications/job/${params.jobId}/status`,
+    { status: params.status, notes: params.notes },
+  )
+  return data
+}
+
+export const updateNotesByJob = async (params: {
+  jobId: string
+  notes: string
+}): Promise<Application> => {
+  const { data } = await client.post<Application>(
+    `/api/v1/applications/job/${params.jobId}/notes`,
+    { notes: params.notes },
+  )
   return data
 }
 
