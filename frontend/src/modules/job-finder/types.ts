@@ -84,6 +84,7 @@ export type FeedbackEventType = 'viewed' | 'saved' | 'applied' | 'interview' | '
 export type TabId =
   | 'overview'
   | 'jobs'
+  | 'tracker'
   | 'profile'
   | 'opportunities'
   | 'preferences'
@@ -156,6 +157,33 @@ export interface PipelineItem {
   has_application: boolean
   application_id: string | null
   application_status: string | null
+}
+
+// ── Application Tracker ───────────────────────────────────────────────────────
+
+export type ApplicationStatus =
+  | 'found' | 'shortlisted' | 'cv_generated' | 'approved'
+  | 'applied' | 'viewed' | 'replied' | 'interview'
+  | 'rejected' | 'archived'
+
+export interface ApplicationTrackerItem {
+  id: string
+  job_id: string
+  job_title: string
+  company_name: string
+  location: string | null
+  remote: 'none' | 'hybrid' | 'full'
+  status: ApplicationStatus
+  readiness_score: number | null
+  readiness_label: 'excellent' | 'strong' | 'moderate' | 'weak' | null
+  has_workspace: boolean
+  applied_at: string | null
+  approved_at: string | null
+  replied_at: string | null
+  interview_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
 }
 
 // ── Evidence Discovery / Enrichment ───────────────────────────────────────────

@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Briefcase, UserCircle, Compass,
-  Settings, ChevronRight, Brain, Sliders, Sparkles
+  Settings, ChevronRight, Brain, Sliders, Sparkles,
+  KanbanSquare,
 } from 'lucide-react'
 import type { TabId } from './types'
 import OverviewTab from './components/overview/OverviewTab'
 import JobsTab from './components/jobs/JobsTab'
+import TrackerTab from './components/tracker/TrackerTab'
 import ShellTab from './components/ShellTab'
 
 interface TabConfig {
@@ -19,6 +21,7 @@ interface TabConfig {
 const TABS: TabConfig[] = [
   { id: 'overview',      label: 'Overview',             icon: LayoutDashboard, phase: 1 },
   { id: 'jobs',          label: 'Jobs',                 icon: Briefcase,       phase: 1 },
+  { id: 'tracker',       label: 'Tracker',              icon: KanbanSquare,    phase: 1 },
   { id: 'profile',       label: 'Profile Intelligence', icon: UserCircle,      phase: 2 },
   { id: 'opportunities', label: 'Opportunities',        icon: Compass,         phase: 2 },
   { id: 'preferences',   label: 'Preferences',          icon: Sliders,         phase: 2 },
@@ -106,6 +109,8 @@ export default function JobFinderModule() {
         )
       case 'jobs':
         return <JobsTab />
+      case 'tracker':
+        return <TrackerTab />
       default: {
         const cfg = SHELL_CONFIGS[activeTab]
         if (!cfg) return null

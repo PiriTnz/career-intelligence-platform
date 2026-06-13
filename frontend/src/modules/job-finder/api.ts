@@ -7,6 +7,8 @@ import type {
   FeedbackEventType,
   WorkspaceResponse,
   PipelineItem,
+  ApplicationTrackerItem,
+  ApplicationStatus,
   EnrichmentStatus,
   StartEnrichmentResponse,
   EnrichmentAnswerResult,
@@ -61,6 +63,41 @@ export const getWorkspace = async (jobId: string): Promise<WorkspaceResponse> =>
 
 export const getApplicationPipeline = async (): Promise<PipelineItem[]> => {
   const { data } = await client.get<PipelineItem[]>('/api/v1/interview/application-pipeline')
+  return data
+}
+
+// ── Application Tracker ───────────────────────────────────────────────────────
+
+export const getTrackerApplications = async (): Promise<ApplicationTrackerItem[]> => {
+  const { data } = await client.get<ApplicationTrackerItem[]>('/api/v1/applications/tracker')
+  return data
+}
+
+export const updateApplicationStatus = async (params: {
+  applicationId: string
+  status: ApplicationStatus
+  notes?: string
+}): Promise<Application> => {
+  const { data } = await client.patch<Application>(
+    `/api/v1/applications/${params.applicationId}/status`,
+    { status: params.status, notes: params.notes },
+  )
+  return data
+}
+
+export const updateApplicationNotes = async (params: {
+  applicationId: string
+  notes: string
+}): Promise<Application> => {
+  const { data } = await client.patch<Application>(
+    `/api/v1/applications/${params.applicationId}/notes`,
+    { notes: params.notes },
+  )
+  return data
+}
+
+export const createApplication = async (jobId: string): Promise<Application> => {
+  const { data } = await client.post<Application>('/api/v1/applications/', { job_id: jobId })
   return data
 }
 

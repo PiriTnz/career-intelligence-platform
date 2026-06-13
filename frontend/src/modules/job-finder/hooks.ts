@@ -69,6 +69,49 @@ export function usePrepareWorkspace() {
   })
 }
 
+// ── Application Tracker ───────────────────────────────────────────────────────
+
+export function useTrackerApplications() {
+  return useQuery({
+    queryKey: ['job-finder', 'tracker'],
+    queryFn: api.getTrackerApplications,
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+export function useUpdateApplicationStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.updateApplicationStatus,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'tracker'] })
+      qc.invalidateQueries({ queryKey: ['job-finder', 'applications'] })
+    },
+  })
+}
+
+export function useUpdateApplicationNotes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.updateApplicationNotes,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'tracker'] })
+    },
+  })
+}
+
+export function useCreateApplication() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => api.createApplication(jobId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'tracker'] })
+      qc.invalidateQueries({ queryKey: ['job-finder', 'applications'] })
+    },
+  })
+}
+
 // ── Evidence Discovery / Enrichment ───────────────────────────────────────────
 
 export function useEnrichmentStatus(jobId: string | null) {

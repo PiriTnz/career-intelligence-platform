@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -7,13 +8,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.limiter import limiter
-from app.db.models import Application, User
+from app.db.models import Application, InterviewWorkspace, Job, User
 from app.llm import get_provider
-from app.schemas.application import ApplicationCreate, ApplicationRead, ApplicationStatusUpdate
+from app.schemas.application import (
+    ApplicationCreate,
+    ApplicationNotesUpdate,
+    ApplicationRead,
+    ApplicationStatusUpdate,
+    ApplicationTrackerItem,
+)
 from app.schemas.application_package import PreparePackageResponse, RequirementAnalysis, TransferableSkill
 from app.services import application_package_service
 
 router = APIRouter()
+
+# Statuses that set specific timestamps when transitioned into
+_TIMESTAMP_MAP = {
+    "approved":  "approved_at",
+    "applied":   "applied_at",
+    "replied":   "replied_at",
+    "interview": "interview_at",
+}
 
 
 @router.get("/", response_model=list[ApplicationRead])
@@ -27,6 +42,52 @@ async def list_applications(
         .order_by(Application.applied_at.desc())
     )
     return list(result.scalars().all())
+
+
+@router.get("/tracker", response_model=list[ApplicationTrackerItem])
+async def list_tracker_applications(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[ApplicationTrackerItem]:
+    """
+    Return enriched applications joined with Job and optional InterviewWorkspace.
+    Used by the Application Tracker pipeline UI.
+    """
+    stmt = (
+        select(Application, Job, InterviewWorkspace)
+        .join(Job, Application.job_id == Job.id)
+        .outerjoin(
+            InterviewWorkspace,
+            (InterviewWorkspace.job_id == Application.job_id)
+            & (InterviewWorkspace.user_id == Application.user_id),
+        )
+        .where(Application.user_id == current_user.id)
+        .order_by(Application.created_at.desc())
+    )
+    rows = (await db.execute(stmt)).all()
+
+    return [
+        ApplicationTrackerItem(
+            id=app.id,
+            job_id=app.job_id,
+            job_title=job.title,
+            company_name=job.company_name,
+            location=job.location,
+            remote=job.remote,
+            status=app.status,
+            readiness_score=ws.readiness_score if ws else None,
+            readiness_label=ws.readiness_label if ws else None,
+            has_workspace=ws is not None,
+            applied_at=app.applied_at,
+            approved_at=app.approved_at,
+            replied_at=app.replied_at,
+            interview_at=app.interview_at,
+            notes=app.notes,
+            created_at=app.created_at,
+            updated_at=app.updated_at,
+        )
+        for app, job, ws in rows
+    ]
 
 
 @router.post("/", response_model=ApplicationRead, status_code=status.HTTP_201_CREATED)
@@ -85,6 +146,35 @@ async def update_application_status(
     app.status = data.status
     if data.notes is not None:
         app.notes = data.notes
+
+    # Set timestamps the first time each milestone is reached
+    ts_field = _TIMESTAMP_MAP.get(data.status)
+    if ts_field and getattr(app, ts_field) is None:
+        setattr(app, ts_field, datetime.now(timezone.utc))
+
+    await db.commit()
+    await db.refresh(app)
+    return app
+
+
+@router.patch("/{application_id}/notes", response_model=ApplicationRead)
+async def update_application_notes(
+    application_id: uuid.UUID,
+    data: ApplicationNotesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApplicationRead:
+    result = await db.execute(
+        select(Application).where(
+            Application.id == application_id,
+            Application.user_id == current_user.id,
+        )
+    )
+    app = result.scalar_one_or_none()
+    if app is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
+
+    app.notes = data.notes
     await db.commit()
     await db.refresh(app)
     return app
@@ -132,9 +222,6 @@ async def prepare_application_package(
     """
     Generate an evidence-based application package (CV draft + cover letter)
     for the given job. Saves the result; re-running updates the existing package.
-
-    Classification, scoring, and warnings are deterministic.
-    LLM is used only for text generation.
     """
     provider = get_provider()
     try:
