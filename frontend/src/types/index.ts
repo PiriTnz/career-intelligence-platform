@@ -101,8 +101,69 @@ export interface Profile {
   cities: string[]
   contract_types: string[]
   languages: string[]
+  phone: string | null
+  certifications: string[]
+  education: unknown[]
+  experience: unknown[]
+  cv_file_path: string | null
+  raw_json: Record<string, unknown> | null
   is_active: boolean
   created_at: string
+}
+
+export interface ProfileVersion {
+  id: number
+  profile_id: string | null
+  version: number
+  source: string
+  cv_file_path: string | null
+  full_name: string | null
+  phone: string | null
+  email_extracted: string | null
+  location_raw: string | null
+  education: unknown[]
+  experience: unknown[]
+  certifications: string[]
+  extracted_skills: string[]
+  inferred_skills: string[]
+  missing_fields: string[]
+  suggested_roles: string[]
+  extraction_confidence: number
+  created_at: string
+}
+
+export interface CVUploadResult {
+  profile_version_id: number
+  profile_id: string
+  profile_version: number
+  extraction_confidence: number
+  full_name: string | null
+  email_extracted: string | null
+  phone: string | null
+  location_raw: string | null
+  extracted_skills: string[]
+  inferred_skills: string[]
+  suggested_roles: string[]
+  missing_fields: string[]
+  education_count: number
+  experience_count: number
+  certifications: string[]
+  message: string
+}
+
+export interface ProfileCompleteness {
+  completeness: number
+  missing_fields: string[]
+  field_scores: Record<string, number>
+  total_possible: number
+}
+
+export interface AssistantResponse {
+  assistant_message: string
+  updated_profile_fields: Record<string, unknown>
+  missing_fields: string[]
+  profile_completeness: number
+  next_question: string
 }
 
 export interface AgentLog {

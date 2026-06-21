@@ -61,6 +61,13 @@ async def update_profile(
         return None
 
     update_data = data.model_dump(exclude_none=True)
+
+    # work_authorization lives in raw_json, not a direct column
+    if "work_authorization" in update_data:
+        raw_json = dict(profile.raw_json or {})
+        raw_json["visa_work_auth"] = update_data.pop("work_authorization")
+        profile.raw_json = raw_json
+
     for field, value in update_data.items():
         setattr(profile, field, value)
 

@@ -31,6 +31,7 @@ class ProfileUpdate(BaseModel):
     cities: list[str] | None = None
     contract_types: list[str] | None = None
     languages: list[str] | None = None
+    work_authorization: str | None = None
 
 
 class ProfileRead(BaseModel):
@@ -56,6 +57,7 @@ class ProfileRead(BaseModel):
     education: list[Any] = Field(default_factory=list)
     experience: list[Any] = Field(default_factory=list)
     cv_file_path: str | None = None
+    raw_json: dict | None = None
     is_active: bool
     created_at: datetime
 
