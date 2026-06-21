@@ -16,6 +16,11 @@ import type {
   EnrichmentAnswerResult,
   ConfirmationItem,
   ConfirmEnrichmentResponse,
+  JobCreateResult,
+  JobDiscoverResult,
+  JobDiscoverParams,
+  JobImportParams,
+  JobManualParams,
 } from './types'
 
 export type { FeedbackEventType }
@@ -205,5 +210,22 @@ export const confirmEnrichment = async (params: {
   confirmations: ConfirmationItem[]
 }): Promise<ConfirmEnrichmentResponse> => {
   const { data } = await client.post<ConfirmEnrichmentResponse>('/api/v1/enrichment/confirm', params)
+  return data
+}
+
+// ── Job Discovery ─────────────────────────────────────────────────────────────
+
+export const discoverJobs = async (params: JobDiscoverParams): Promise<JobDiscoverResult> => {
+  const { data } = await client.post<JobDiscoverResult>('/api/v1/jobs/discover', params)
+  return data
+}
+
+export const importJobFromUrl = async (params: JobImportParams): Promise<JobCreateResult> => {
+  const { data } = await client.post<JobCreateResult>('/api/v1/jobs/import', params)
+  return data
+}
+
+export const createManualJob = async (params: JobManualParams): Promise<JobCreateResult> => {
+  const { data } = await client.post<JobCreateResult>('/api/v1/jobs/manual', params)
   return data
 }

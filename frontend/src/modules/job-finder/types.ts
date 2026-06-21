@@ -280,3 +280,55 @@ export interface ConfirmEnrichmentResponse {
   enriched_skills: string[]
   session_status: EnrichmentSessionStatus
 }
+
+// ── Job Discovery ─────────────────────────────────────────────────────────────
+
+export interface JobCreateResult {
+  id: string
+  title: string
+  company_name: string
+  location: string | null
+  remote: 'none' | 'hybrid' | 'full'
+  contract_type: string | null
+  salary_min: number | null
+  salary_max: number | null
+  required_skills: string[]
+  url: string
+  source: string
+  description: string | null
+  score_total: number | null
+  is_new: boolean
+}
+
+export interface JobDiscoverResult {
+  jobs: JobCreateResult[]
+  keywords: string
+  location: string
+  new_count: number
+  total_count: number
+}
+
+export interface JobDiscoverParams {
+  keywords?: string
+  location?: string
+  max_results?: number
+  contract_type?: string | null
+  remote_only?: boolean
+}
+
+export interface JobImportParams {
+  url: string
+}
+
+export interface JobManualParams {
+  title: string
+  company_name: string
+  url?: string
+  location?: string
+  remote?: 'none' | 'hybrid' | 'full'
+  contract_type?: string | null
+  salary_min?: number | null
+  salary_max?: number | null
+  description?: string
+  required_skills?: string[]
+}

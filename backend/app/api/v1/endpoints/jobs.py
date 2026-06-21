@@ -1,21 +1,69 @@
 import logging
-import uuid
+import uuid as uuid_mod
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_active_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.db.models import AgentLog, FeedbackEvent, User
 from app.schemas.feedback import FeedbackCreate, FeedbackEventRead
-from app.schemas.job import JobListItem, JobRead, JobSyncResult
+from app.schemas.job import (
+    JobCreateResult,
+    JobDiscoverRequest,
+    JobDiscoverResult,
+    JobImportRequest,
+    JobListItem,
+    JobManualCreate,
+    JobRead,
+    JobSyncResult,
+)
 from app.schemas.recommendation import JobRecommendation, MatchDetailRead, ScoreBreakdownRead
-from app.services import job_service, matching_engine, normalizer, scoring_service
+from app.services import job_import_service, job_service, matching_engine, normalizer, scoring_service
 from app.services import preference_service
 from app.services.sources import adzuna, france_travail
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+# ── Shared helper ─────────────────────────────────────────────────────────────
+
+async def _score_and_save(db: AsyncSession, job, profile: dict, user_id) -> int | None:
+    """Score job against profile and persist. Returns score total, or None if no profile."""
+    if not profile:
+        return None
+    job_dict = _job_to_dict(job)
+    breakdown, confidence = scoring_service.score_job(job_dict, profile)
+    await scoring_service.save_score(
+        db,
+        job_id=job.id,
+        user_id=user_id,
+        profile_version=profile.get("version", 1),
+        breakdown=breakdown,
+        confidence=confidence,
+    )
+    return breakdown.total
+
+
+def _job_to_create_result(job, score_total: int | None, is_new: bool) -> JobCreateResult:
+    return JobCreateResult(
+        id=job.id,
+        title=job.title,
+        company_name=job.company_name,
+        location=job.location,
+        remote=job.remote,
+        contract_type=job.contract_type,
+        salary_min=job.salary_min,
+        salary_max=job.salary_max,
+        required_skills=job.required_skills or [],
+        url=job.url,
+        source=job.source,
+        description=job.description,
+        score_total=score_total,
+        is_new=is_new,
+    )
 
 
 @router.get("", response_model=list[JobListItem])
@@ -155,7 +203,7 @@ async def get_recommendations(
 
 @router.post("/{job_id}/feedback", status_code=status.HTTP_201_CREATED, response_model=FeedbackEventRead)
 async def record_feedback(
-    job_id: uuid.UUID,
+    job_id: uuid_mod.UUID,
     body: FeedbackCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -191,7 +239,7 @@ async def record_feedback(
 
 @router.get("/{job_id}", response_model=JobRead)
 async def get_job(
-    job_id: uuid.UUID,
+    job_id: uuid_mod.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -199,6 +247,127 @@ async def get_job(
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.post("/discover", response_model=JobDiscoverResult)
+async def discover_jobs(
+    body: JobDiscoverRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> JobDiscoverResult:
+    """
+    Search Adzuna with user-supplied keywords + location.
+    Each found job is normalised, deduplicated, and scored against the
+    user's active profile. Returns both new and already-known jobs.
+    """
+    profile = await job_service.get_profile_dict(db, current_user.id)
+
+    raw_jobs: list[dict] = []
+    if settings.adzuna_app_id and settings.adzuna_app_key:
+        try:
+            raw_jobs = await adzuna.fetch_jobs(
+                keywords=body.keywords,
+                location=body.location,
+                max_results=body.max_results,
+            )
+        except Exception as exc:
+            logger.warning("Adzuna discover error: %s", exc)
+
+    results: list[JobCreateResult] = []
+    for raw in raw_jobs:
+        try:
+            data = normalizer.normalize(raw, "adzuna")
+            if not data.get("url") or not data.get("title"):
+                continue
+            if body.remote_only and data.get("remote") != "full":
+                continue
+            if body.contract_type and data.get("contract_type") != body.contract_type:
+                continue
+
+            job, is_new = await job_service.upsert_job(db, data)
+            score_total = await _score_and_save(db, job, profile, current_user.id) if is_new else None
+            results.append(_job_to_create_result(job, score_total, is_new))
+        except Exception as exc:
+            logger.warning("discover: skipping job: %s", exc)
+
+    await db.commit()
+    return JobDiscoverResult(
+        jobs=results,
+        keywords=body.keywords,
+        location=body.location,
+        new_count=sum(1 for r in results if r.is_new),
+        total_count=len(results),
+    )
+
+
+@router.post("/import", response_model=JobCreateResult)
+async def import_job_from_url(
+    body: JobImportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> JobCreateResult:
+    """
+    Fetch *url*, extract job details via JSON-LD / OpenGraph / heuristics,
+    then deduplicate, store, and score against the user's active profile.
+    """
+    try:
+        data = await job_import_service.fetch_and_parse(body.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    profile = await job_service.get_profile_dict(db, current_user.id)
+    job, is_new = await job_service.upsert_job(db, data)
+    score_total = await _score_and_save(db, job, profile, current_user.id) if is_new else None
+    await db.commit()
+    return _job_to_create_result(job, score_total, is_new)
+
+
+@router.post("/manual", response_model=JobCreateResult, status_code=status.HTTP_201_CREATED)
+async def create_manual_job(
+    body: JobManualCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> JobCreateResult:
+    """
+    Store a manually-entered job posting.
+    If no URL is provided a synthetic ``manual://<uuid>`` URL is generated
+    so the unique-URL constraint is satisfied.
+    """
+    url = body.url or f"manual://{uuid_mod.uuid4()}"
+
+    # Extract skills from description if none provided
+    skills = body.required_skills
+    if not skills and body.description:
+        skills = normalizer._extract_skills(body.description)  # noqa: SLF001
+
+    language = "fr"
+    if body.description:
+        language = normalizer._detect_language(body.description)  # noqa: SLF001
+
+    data = {
+        "source": "manual",
+        "url": url,
+        "title": body.title,
+        "company_name": body.company_name,
+        "location": body.location,
+        "remote": body.remote,
+        "contract_type": body.contract_type,
+        "salary_min": body.salary_min,
+        "salary_max": body.salary_max,
+        "salary_currency": "EUR",
+        "required_skills": skills,
+        "description": body.description,
+        "language": language,
+        "experience_level": None,
+        "published_at": None,
+        "raw_json": body.model_dump(),
+    }
+
+    profile = await job_service.get_profile_dict(db, current_user.id)
+    job, is_new = await job_service.upsert_job(db, data)
+    score_total = await _score_and_save(db, job, profile, current_user.id)
+    await db.commit()
+    return _job_to_create_result(job, score_total, is_new)
 
 
 @router.post("/sync", response_model=JobSyncResult)

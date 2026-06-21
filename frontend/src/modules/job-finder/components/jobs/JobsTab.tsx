@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Briefcase, RefreshCw } from 'lucide-react'
+import { Briefcase, RefreshCw, Telescope } from 'lucide-react'
 import { useRecommendations, useFeedback } from '../../hooks'
 import type { RecommendationFilters, JobRecommendation, FeedbackEventType } from '../../types'
 import JobFilters from './JobFilters'
 import JobCard from './JobCard'
 import JobDrawer from './JobDrawer'
+import JobDiscoveryModal from './JobDiscoveryModal'
 import { SkeletonCards } from '../ui/Skeleton'
 import EmptyState from '../ui/EmptyState'
 import ErrorState from '../ui/ErrorState'
@@ -19,6 +20,7 @@ const DEFAULT_FILTERS: RecommendationFilters = {
 export default function JobsTab() {
   const [filters, setFilters] = useState<RecommendationFilters>(DEFAULT_FILTERS)
   const [selectedJob, setSelectedJob] = useState<JobRecommendation | null>(null)
+  const [discoverOpen, setDiscoverOpen] = useState(false)
 
   const params = {
     min_score: filters.min_score || undefined,
@@ -63,13 +65,22 @@ export default function JobsTab() {
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">Ranked by AI-blended score</p>
           </div>
-          <button
-            onClick={() => refetch()}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-lg transition-all bg-white"
-          >
-            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setDiscoverOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-white bg-brand-500 hover:bg-brand-600 px-3 py-1.5 rounded-lg transition-all font-medium"
+            >
+              <Telescope size={12} />
+              Discover Jobs
+            </button>
+            <button
+              onClick={() => refetch()}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-lg transition-all bg-white"
+            >
+              <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
         </div>
         <JobFilters filters={filters} onChange={setFilters} />
       </div>
@@ -121,6 +132,9 @@ export default function JobsTab() {
         onFeedback={handleFeedback}
         feedbackPending={feedback.isPending}
       />
+
+      {/* Discovery modal */}
+      <JobDiscoveryModal open={discoverOpen} onClose={() => setDiscoverOpen(false)} />
     </div>
   )
 }

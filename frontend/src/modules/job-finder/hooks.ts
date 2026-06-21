@@ -213,3 +213,35 @@ export function useConfirmEnrichment() {
     },
   })
 }
+
+// ── Job Discovery ─────────────────────────────────────────────────────────────
+
+export function useDiscoverJobs() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.discoverJobs,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'recommendations'] })
+    },
+  })
+}
+
+export function useImportJobFromUrl() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.importJobFromUrl,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'recommendations'] })
+    },
+  })
+}
+
+export function useCreateManualJob() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.createManualJob,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-finder', 'recommendations'] })
+    },
+  })
+}

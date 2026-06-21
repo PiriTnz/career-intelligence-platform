@@ -1,7 +1,29 @@
 {
   "permissions": {
     "allow": [
-      "Bash(chmod +x *)"
+      "Bash(chmod +x *)",
+      "Bash(npx tsc *)",
+      "Bash(python -c \"from app.schemas.profile import ProfileRead, ProfileUpdate; from app.services.profile_service import update_profile; print\\('OK'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(npm run *)",
+      "Bash(python -m pip install sqlalchemy)",
+      "Bash(pip install *)",
+      "Bash(python *)",
+      "Bash(uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(curl -s http://localhost:8000/api/v1/health)",
+      "Bash(pg_isready -h localhost -p 5432)",
+      "Bash(psql postgresql://jh:changeme_db@localhost:5432/jobhunter -c '\\\\dt')",
+      "Bash(alembic upgrade *)",
+      "Bash(docker exec jh_postgres *)",
+      "Bash(curl -s http://localhost:8000/openapi.json)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(DATABASE_URL=postgresql+asyncpg://jh:changeme_db@localhost:5432/jobhunter SECRET_KEY=dev_secret_key_32chars_minimum__ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"test@profile.dev\",\"password\":\"Test1234!\"}')",
+      "Bash(git *)",
+      "Bash(curl -s http://localhost:11434/api/tags)",
+      "Bash(curl -s http://localhost:11434/api/generate -d '{\"model\":\"llama3\",\"prompt\":\"Say hi\",\"stream\":false}')",
+      "Bash(DATABASE_URL=postgresql+asyncpg://jh:changeme_db@localhost:5432/jobhunter SECRET_KEY=dev_secret_key_32chars_minimum__ OLLAMA_URL=http://localhost:11434 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(curl -s -X POST http://localhost:11434/api/generate -H 'Content-Type: application/json' -d '{\"model\":\"llama3\",\"prompt\":\"Return JSON: {\\\\\"skills\\\\\":[\\\\\"python\\\\\"]}\",\"stream\":false}')"
     ]
   }
 }
